@@ -197,6 +197,34 @@ def cmd_tx(args):
             print(f"    Sellers:     {fmt_number(p.get('sellers'))}")
 
 
+def cmd_batch_tx(args):
+    """Batch get transaction stats for multiple tokens."""
+    tokens = []
+    for item in args.tokens:
+        chain, contract = item.split(":", 1)
+        tokens.append({"chain": chain, "contract": contract})
+    result = request("/bgw-pro/market/v3/coin/batchGetTxInfo", {"list": tokens})
+    print(json.dumps(result, indent=2))
+
+
+def cmd_history(args):
+    """Get historical token list by timestamp."""
+    result = request("/bgw-pro/market/v3/historical-coins",
+                     {"createTime": args.create_time, "limit": args.limit})
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    tokens = data.get("tokenList", []) if isinstance(data, dict) else data if isinstance(data, list) else []
+    if not tokens:
+        print("No tokens found.")
+        return
+    print(f"\n{'Symbol':<12} {'Chain':<8} {'Name':<30} {'Created'}")
+    print("-" * 70)
+    for t in tokens[:args.limit]:
+        print(f"{t.get('symbol', '?'):<12} {t.get('chain', '?'):<8} {t.get('name', '?'):<30} {t.get('createTime', '?')}")
+
+
 def cmd_swap(args):
     """Get swap quote."""
     body = {
@@ -241,6 +269,41 @@ def cmd_liquidity(args):
         liq = fmt_volume(p.get("liquidity"))
         vol = fmt_volume(p.get("volume_24h") or p.get("volume24h"))
         print(f"{name:<30} {liq:<16} {vol:<16}")
+
+
+def cmd_send(args):
+    """Broadcast signed transactions via MEV-protected endpoint."""
+    txs = []
+    for tx_str in args.txs:
+        parts = tx_str.split(":", 4)
+        if len(parts) < 4:
+            print(f"Error: each tx must be id:from:nonce:rawTx, got: {tx_str}", file=sys.stderr)
+            sys.exit(1)
+        tx = {
+            "id": parts[0],
+            "chain": args.chain,
+            "from": parts[1],
+            "nonce": int(parts[2]),
+            "rawTx": parts[3],
+        }
+        txs.append(tx)
+    result = request("/bgw-pro/swapx/pro/send", {"chain": args.chain, "txs": txs})
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    results = data.get("result", []) if isinstance(data, dict) else data if isinstance(data, list) else []
+    if not results:
+        print("No results returned.")
+        return
+    print(f"\n{'ID':<36} {'Status':<8} {'TX Hash'}")
+    print("-" * 100)
+    for r in results:
+        oid = r.get("id", "?")[:34]
+        code = r.get("code", "?")
+        icon = "✅" if str(code) == "0" else "❌"
+        tx_hash = r.get("txHash", r.get("message", "?"))
+        print(f"{icon} {oid:<34} {code:<6} {tx_hash}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────
@@ -292,6 +355,17 @@ def main():
     p.add_argument("contract")
     p.set_defaults(func=cmd_tx)
 
+    # batch-tx
+    p = sub.add_parser("batch-tx", help="Batch transaction stats for multiple tokens")
+    p.add_argument("tokens", nargs="+", help="chain:contract pairs (e.g. sol:EPjF... eth:0xdAC...)")
+    p.set_defaults(func=cmd_batch_tx)
+
+    # history (historical-coins)
+    p = sub.add_parser("history", help="Get historical token list by timestamp")
+    p.add_argument("create_time", help="Timestamp (e.g. '2025-06-17 06:55:28')")
+    p.add_argument("-n", "--limit", type=int, default=10, help="Number of records")
+    p.set_defaults(func=cmd_history)
+
     # swap
     p = sub.add_parser("swap", help="Get swap quote")
     p.add_argument("--from-chain", required=True, help="Source chain")
@@ -306,6 +380,12 @@ def main():
     p.add_argument("chain")
     p.add_argument("contract")
     p.set_defaults(func=cmd_liquidity)
+
+    # send (broadcast signed tx)
+    p = sub.add_parser("send", help="Broadcast signed transactions (MEV-protected)")
+    p.add_argument("chain", help="Chain name (e.g. sol, eth, bnb)")
+    p.add_argument("txs", nargs="+", help="Transactions as id:from:nonce:rawTx")
+    p.set_defaults(func=cmd_send)
 
     args = parser.parse_args()
     args.func(args)
