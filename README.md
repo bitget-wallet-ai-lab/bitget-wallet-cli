@@ -103,3 +103,4 @@ Use empty contract (or omit) for native tokens (ETH, SOL, BNB, etc.).
 ## License
 
 MIT
+# Branch protection test - safe to delete
