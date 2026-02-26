@@ -96,11 +96,54 @@ def cmd_audit(args):
         print("No audit data available.")
         return
     audit = audits[0]
-    risk = audit.get("risk_level", "unknown")
+    # Determine risk level: try structured field first, then derive from counts
+    risk = audit.get("risk_level", "")
+    if not risk:
+        if audit.get("highRisk"):
+            risk = "high"
+        elif audit.get("riskCount", 0) > 0:
+            risk = "high"
+        elif audit.get("warnCount", 0) > 0:
+            risk = "medium"
+        else:
+            risk = "low"
     emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(risk, "⚪")
-    print(f"\n{emoji} Security Audit: {audit.get('symbol', '?')} ({risk.upper()} risk)")
+    symbol = audit.get("symbol") or audit.get("contract", "?")[:12]
+    print(f"\n{emoji} Security Audit: {symbol} ({risk.upper()} risk)")
     print(f"{'Chain:':<20} {args.chain}")
     print(f"{'Contract:':<20} {args.contract}")
+    # Show tax info if available
+    buy_tax = audit.get("buyTax", 0)
+    sell_tax = audit.get("sellTax", 0)
+    print(f"{'Buy Tax:':<20} {buy_tax}%")
+    print(f"{'Sell Tax:':<20} {sell_tax}%")
+    # Show key security flags
+    flags = [
+        ("Freeze Authority", audit.get("freezeAuth")),
+        ("Mint Authority", audit.get("mintAuth")),
+        ("Token2022", audit.get("token2022")),
+        ("LP Locked", audit.get("lpLock")),
+    ]
+    flag_items = [(n, v) for n, v in flags if v is not None]
+    if flag_items:
+        print(f"\n{'Flag':<25} {'Status':<10}")
+        print("-" * 37)
+        for name, val in flag_items:
+            # For freeze/mint auth: True = risky; for LP lock: True = good
+            if name == "LP Locked":
+                icon = "✅" if val else "⚠️"
+            else:
+                icon = "⚠️" if val else "✅"
+            print(f"{icon} {name:<23} {val}")
+    # Show risk/warn checks if present (structured audit format)
+    for check_key, label in [("riskChecks", "🔴 Risk"), ("warnChecks", "⚠️ Warn"), ("lowChecks", "ℹ️ Info")]:
+        checks = audit.get(check_key)
+        if checks:
+            print(f"\n{label} Checks:")
+            for item in checks:
+                name = item.get("name") or item.get("labelName") or item.get("audit_name", "?")
+                print(f"  - {name}")
+    # Legacy audit_items format
     items = audit.get("audit_items") or audit.get("auditItems") or []
     if items:
         print(f"\n{'Check':<30} {'Result':<10}")
@@ -152,6 +195,34 @@ def cmd_tx(args):
             print(f"    Sell Volume: {fmt_volume(p.get('sellVolume'))}")
             print(f"    Buyers:      {fmt_number(p.get('buyers'))}")
             print(f"    Sellers:     {fmt_number(p.get('sellers'))}")
+
+
+def cmd_batch_tx(args):
+    """Batch get transaction stats for multiple tokens."""
+    tokens = []
+    for item in args.tokens:
+        chain, contract = item.split(":", 1)
+        tokens.append({"chain": chain, "contract": contract})
+    result = request("/bgw-pro/market/v3/coin/batchGetTxInfo", {"list": tokens})
+    print(json.dumps(result, indent=2))
+
+
+def cmd_history(args):
+    """Get historical token list by timestamp."""
+    result = request("/bgw-pro/market/v3/historical-coins",
+                     {"createTime": args.create_time, "limit": args.limit})
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    tokens = data.get("tokenList", []) if isinstance(data, dict) else data if isinstance(data, list) else []
+    if not tokens:
+        print("No tokens found.")
+        return
+    print(f"\n{'Symbol':<12} {'Chain':<8} {'Name':<30} {'Created'}")
+    print("-" * 70)
+    for t in tokens[:args.limit]:
+        print(f"{t.get('symbol', '?'):<12} {t.get('chain', '?'):<8} {t.get('name', '?'):<30} {t.get('createTime', '?')}")
 
 
 def cmd_swap(args):
@@ -248,6 +319,17 @@ def main():
     p.add_argument("chain")
     p.add_argument("contract")
     p.set_defaults(func=cmd_tx)
+
+    # batch-tx
+    p = sub.add_parser("batch-tx", help="Batch transaction stats for multiple tokens")
+    p.add_argument("tokens", nargs="+", help="chain:contract pairs (e.g. sol:EPjF... eth:0xdAC...)")
+    p.set_defaults(func=cmd_batch_tx)
+
+    # history (historical-coins)
+    p = sub.add_parser("history", help="Get historical token list by timestamp")
+    p.add_argument("create_time", help="Timestamp (e.g. '2025-06-17 06:55:28')")
+    p.add_argument("-n", "--limit", type=int, default=10, help="Number of records")
+    p.set_defaults(func=cmd_history)
 
     # swap
     p = sub.add_parser("swap", help="Get swap quote")

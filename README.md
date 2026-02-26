@@ -83,6 +83,8 @@ Use empty contract (or omit) for native tokens (ETH, SOL, BNB, etc.).
 | `bgw kline` | K-line / candlestick data |
 | `bgw tx` | Transaction volume and trader stats |
 | `bgw swap` | Swap quote with best route (same-chain & cross-chain) |
+| `bgw batch-tx` | Batch transaction stats for multiple tokens |
+| `bgw history` | Discover new tokens by timestamp |
 | `bgw lp` | Liquidity pool information |
 
 ## Environment Variables
