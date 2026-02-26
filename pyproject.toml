@@ -1,0 +1,19 @@
+[project]
+name = "bitget-wallet-cli"
+version = "1.0.0"
+description = "Bitget Wallet CLI — on-chain data at your fingertips"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.28.0",
+]
+
+[project.scripts]
+bgw = "bgw.cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["bgw*"]
