@@ -90,7 +90,8 @@ def cmd_audit(args):
     if args.json:
         print(json.dumps(result, indent=2))
         return
-    audits = result.get("data", {}).get("list", [])
+    data = result.get("data", [])
+    audits = data.get("list", []) if isinstance(data, dict) else data if isinstance(data, list) else []
     if not audits:
         print("No audit data available.")
         return
