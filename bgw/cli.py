@@ -372,7 +372,8 @@ def main():
     p.add_argument("--from-contract", default="", help="Source token (omit for native)")
     p.add_argument("--to-chain", default="", help="Dest chain (default: same)")
     p.add_argument("--to-contract", required=True, help="Dest token contract")
-    p.add_argument("--amount", required=True, help="Amount to swap")
+    p.add_argument("--amount", required=True,
+                   help="Human-readable amount (0.1 = 0.1 USDT, NOT wei/lamports)")
     p.set_defaults(func=cmd_swap)
 
     # liquidity
