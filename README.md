@@ -86,6 +86,8 @@ Use empty contract (or omit) for native tokens (ETH, SOL, BNB, etc.).
 | `bgw batch-tx` | Batch transaction stats for multiple tokens |
 | `bgw history` | Discover new tokens by timestamp |
 | `bgw send` | Broadcast signed transactions (MEV-protected) |
+
+> ⚠️ **Swap amounts are human-readable** — use `--amount 0.1` for 0.1 USDT, NOT `100000000000000000`. Response amounts are also human-readable.
 | `bgw lp` | Liquidity pool information |
 
 ## Environment Variables
