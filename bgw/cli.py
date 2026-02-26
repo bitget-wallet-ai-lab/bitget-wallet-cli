@@ -96,11 +96,54 @@ def cmd_audit(args):
         print("No audit data available.")
         return
     audit = audits[0]
-    risk = audit.get("risk_level", "unknown")
+    # Determine risk level: try structured field first, then derive from counts
+    risk = audit.get("risk_level", "")
+    if not risk:
+        if audit.get("highRisk"):
+            risk = "high"
+        elif audit.get("riskCount", 0) > 0:
+            risk = "high"
+        elif audit.get("warnCount", 0) > 0:
+            risk = "medium"
+        else:
+            risk = "low"
     emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(risk, "⚪")
-    print(f"\n{emoji} Security Audit: {audit.get('symbol', '?')} ({risk.upper()} risk)")
+    symbol = audit.get("symbol") or audit.get("contract", "?")[:12]
+    print(f"\n{emoji} Security Audit: {symbol} ({risk.upper()} risk)")
     print(f"{'Chain:':<20} {args.chain}")
     print(f"{'Contract:':<20} {args.contract}")
+    # Show tax info if available
+    buy_tax = audit.get("buyTax", 0)
+    sell_tax = audit.get("sellTax", 0)
+    print(f"{'Buy Tax:':<20} {buy_tax}%")
+    print(f"{'Sell Tax:':<20} {sell_tax}%")
+    # Show key security flags
+    flags = [
+        ("Freeze Authority", audit.get("freezeAuth")),
+        ("Mint Authority", audit.get("mintAuth")),
+        ("Token2022", audit.get("token2022")),
+        ("LP Locked", audit.get("lpLock")),
+    ]
+    flag_items = [(n, v) for n, v in flags if v is not None]
+    if flag_items:
+        print(f"\n{'Flag':<25} {'Status':<10}")
+        print("-" * 37)
+        for name, val in flag_items:
+            # For freeze/mint auth: True = risky; for LP lock: True = good
+            if name == "LP Locked":
+                icon = "✅" if val else "⚠️"
+            else:
+                icon = "⚠️" if val else "✅"
+            print(f"{icon} {name:<23} {val}")
+    # Show risk/warn checks if present (structured audit format)
+    for check_key, label in [("riskChecks", "🔴 Risk"), ("warnChecks", "⚠️ Warn"), ("lowChecks", "ℹ️ Info")]:
+        checks = audit.get(check_key)
+        if checks:
+            print(f"\n{label} Checks:")
+            for item in checks:
+                name = item.get("name") or item.get("labelName") or item.get("audit_name", "?")
+                print(f"  - {name}")
+    # Legacy audit_items format
     items = audit.get("audit_items") or audit.get("auditItems") or []
     if items:
         print(f"\n{'Check':<30} {'Result':<10}")
