@@ -68,9 +68,9 @@ bgw top gainers --json | jq '.[0]'
 
 ## Supported Chains
 
-Ethereum · Solana · BNB Chain · Base · Arbitrum · Tron · TON · Sui · Optimism
+`eth` · `sol` · `bnb` · `base` · `arbitrum` · `trx` · `ton` · `sui` · `optimism`
 
-Chain codes: `eth` · `sol` · `bnb` · `base` · `arbitrum` · `trx` · `ton` · `sui` · `optimism`. Use empty contract (or omit) for native tokens (ETH, SOL, BNB, etc.).
+Use empty contract (or omit) for native tokens (ETH, SOL, BNB, etc.).
 
 ## Commands
 
@@ -83,6 +83,9 @@ Chain codes: `eth` · `sol` · `bnb` · `base` · `arbitrum` · `trx` · `ton` �
 | `bgw kline` | K-line / candlestick data |
 | `bgw tx` | Transaction volume and trader stats |
 | `bgw swap` | Swap quote with best route (same-chain & cross-chain) |
+| `bgw batch-tx` | Batch transaction stats for multiple tokens |
+| `bgw history` | Discover new tokens by timestamp |
+| `bgw send` | Broadcast signed transactions (MEV-protected) |
 | `bgw lp` | Liquidity pool information |
 
 ## Environment Variables
@@ -95,16 +98,10 @@ Chain codes: `eth` · `sol` · `bnb` · `base` · `arbitrum` · `trx` · `ton` �
 
 > **Note:** The built-in demo keys are for testing purposes and may change over time. If they stop working, please update the CLI to get the latest keys.
 
-## Security
-
-- Demo API keys are public and read-only safe
-- Swap quotes are informational only — no transaction signing or execution
-- For production use, set your own credentials via environment variables
-
 ## Related Projects
 
-- [bitget-wallet-skill](https://github.com/bitget-wallet-ai-lab/bitget-wallet-skill) — AI Agent skill for OpenClaw / Manus / Devin / Bolt / Replit ([compatibility guide](https://github.com/bitget-wallet-ai-lab/bitget-wallet-skill/blob/main/COMPATIBILITY.md))
-- [bitget-wallet-mcp](https://github.com/bitget-wallet-ai-lab/bitget-wallet-mcp) — MCP Server for Claude Desktop / Cursor / Windsurf
+- [bitget-wallet-skill](https://github.com/bitget-wallet-ai-lab/bitget-wallet-skill) — OpenClaw AI Agent skill (with [platform compatibility guide](https://github.com/bitget-wallet-ai-lab/bitget-wallet-skill/blob/main/COMPATIBILITY.md))
+- [bitget-wallet-mcp](https://github.com/bitget-wallet-ai-lab/bitget-wallet-mcp) — MCP Server for Claude/Cursor/Windsurf
 
 ## License
 
