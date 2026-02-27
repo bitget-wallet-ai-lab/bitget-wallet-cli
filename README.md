@@ -100,6 +100,17 @@ Use empty contract (or omit) for native tokens (ETH, SOL, BNB, etc.).
 
 > **Note:** The built-in demo keys are for testing purposes and may change over time. If they stop working, please update the CLI to get the latest keys.
 
+## Security
+
+- Only communicates with `https://bopenapi.bgwapi.io` — no other external endpoints
+- No `eval()` / `exec()` or dynamic code execution
+- No file system access outside the project directory
+- Built-in API keys are public demo credentials (safe to commit)
+- No data collection, telemetry, or analytics
+- No access to sensitive files (SSH keys, credentials, wallet files, etc.)
+- Dependencies: `requests` only (stdlib: `hmac`, `hashlib`, `json`, `base64`)
+- We recommend auditing the source yourself before installation
+
 ## Related Projects
 
 - [bitget-wallet-skill](https://github.com/bitget-wallet-ai-lab/bitget-wallet-skill) — OpenClaw AI Agent skill (with [platform compatibility guide](https://github.com/bitget-wallet-ai-lab/bitget-wallet-skill/blob/main/COMPATIBILITY.md))
