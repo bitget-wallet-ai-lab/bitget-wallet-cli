@@ -11,7 +11,7 @@ from .format import fmt_change, fmt_number, fmt_price, fmt_volume
 CHAINS = {
     "eth": "1", "sol": "100278", "bnb": "56", "base": "8453",
     "arbitrum": "42161", "trx": "6", "ton": "100280",
-    "sui": "100281", "optimism": "10",
+    "suinet": "100281", "optimism": "10", "matic": "137",
 }
 
 
@@ -342,15 +342,14 @@ def cmd_send(args):
     """Broadcast signed transactions via MEV-protected endpoint."""
     txs = []
     for tx_str in args.txs:
-        parts = tx_str.split(":", 4)
+        parts = tx_str.split(":", 3)
         if len(parts) < 4:
-            print(f"Error: each tx must be id:from:nonce:rawTx, got: {tx_str}", file=sys.stderr)
+            print(f"Error: each tx must be id:chain:from:rawTx, got: {tx_str}", file=sys.stderr)
             sys.exit(1)
         tx = {
             "id": parts[0],
-            "chain": args.chain,
-            "from": parts[1],
-            "nonce": int(parts[2]),
+            "chain": parts[1],
+            "from": parts[2],
             "rawTx": parts[3],
         }
         txs.append(tx)
@@ -479,7 +478,7 @@ def main():
     # send (broadcast signed tx)
     p = sub.add_parser("send", help="Broadcast signed transactions (MEV-protected)")
     p.add_argument("chain", help="Chain name (e.g. sol, eth, bnb)")
-    p.add_argument("txs", nargs="+", help="Transactions as id:from:nonce:rawTx")
+    p.add_argument("txs", nargs="+", help="Transactions as id:chain:from:rawTx")
     p.set_defaults(func=cmd_send)
 
     args = parser.parse_args()

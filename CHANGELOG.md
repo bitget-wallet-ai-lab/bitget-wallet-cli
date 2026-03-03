@@ -19,10 +19,15 @@ Format: date-based versioning (`YYYY.M.DD-N`), aligned with [bitget-wallet-skill
 - `--from-address`, `--from-symbol`, `--to-symbol` parameters for swap command
 - `--from-symbol`, `--to-symbol` parameters for calldata command
 
+### Fixed
+- `bgw send` tx format aligned with skill: `id:chain:from:rawTx` (was `id:from:nonce:rawTx`)
+- Chain code: `sui` → `suinet` to match API and skill documentation
+- Added missing `matic` (Polygon) to supported chains
+
 ### Audit
-- ✅ `cli.py`: new commands + parameter additions, no breaking changes
+- ✅ `cli.py`: new commands + parameter additions + send format fix
 - ✅ No dependency changes
-- ✅ Full parity with skill repo commands and parameters
+- ✅ Full parity with skill repo commands, parameters, and chain codes
 
 ---
 
