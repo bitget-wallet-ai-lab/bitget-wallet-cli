@@ -251,6 +251,42 @@ def cmd_swap(args):
     print(f"{'Gas Limit:':<16} {data.get('gasLimit', '?')}")
 
 
+def cmd_calldata(args):
+    """Generate unsigned swap transaction data."""
+    body = {
+        "fromChain": args.from_chain,
+        "fromContract": args.from_contract or "",
+        "toChain": args.to_chain or args.from_chain,
+        "toContract": args.to_contract,
+        "fromAmount": args.amount,
+        "fromAddress": args.from_address,
+        "toAddress": args.to_address,
+        "market": args.market,
+    }
+    if args.slippage:
+        body["slippage"] = args.slippage
+    if args.deadline:
+        body["deadline"] = args.deadline
+    result = request("/bgw-pro/swapx/pro/swap", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print("No calldata available.", file=sys.stderr)
+        sys.exit(1)
+    print(f"\n🔧 Swap Calldata")
+    print(f"{'From:':<16} {args.amount} ({args.from_chain})")
+    print(f"{'To Chain:':<16} {args.to_chain or args.from_chain}")
+    print(f"{'Market:':<16} {args.market}")
+    if args.deadline:
+        print(f"{'Deadline:':<16} {args.deadline}s")
+    txs = data.get("txs") or data.get("transactions") or []
+    print(f"{'Transactions:':<16} {len(txs)}")
+    for i, tx in enumerate(txs):
+        print(f"  [{i}] to={tx.get('to', '?')[:20]}... value={tx.get('value', '0')}")
+
+
 def cmd_liquidity(args):
     """Get liquidity pools."""
     result = request("/bgw-pro/market/v3/poolList",
@@ -381,6 +417,23 @@ def main():
     p.add_argument("chain")
     p.add_argument("contract")
     p.set_defaults(func=cmd_liquidity)
+
+    # calldata
+    p = sub.add_parser("calldata", help="Generate unsigned swap transaction data")
+    p.add_argument("--from-chain", required=True, help="Source chain")
+    p.add_argument("--from-contract", default="", help="Source token (omit for native)")
+    p.add_argument("--to-chain", default="", help="Dest chain (default: same)")
+    p.add_argument("--to-contract", required=True, help="Dest token contract")
+    p.add_argument("--amount", required=True,
+                   help="Human-readable amount (0.1 = 0.1 USDT, NOT wei/lamports)")
+    p.add_argument("--from-address", required=True, help="Sender wallet address")
+    p.add_argument("--to-address", required=True, help="Recipient wallet address")
+    p.add_argument("--market", required=True, help="Market/aggregator from quote result")
+    p.add_argument("--slippage", type=float, help="Slippage tolerance percentage")
+    p.add_argument("--deadline", type=int,
+                   help="Transaction deadline in seconds (default: API default 600s). "
+                        "Recommended: 300s for safety against sandwich attacks.")
+    p.set_defaults(func=cmd_calldata)
 
     # send (broadcast signed tx)
     p = sub.add_parser("send", help="Broadcast signed transactions (MEV-protected)")

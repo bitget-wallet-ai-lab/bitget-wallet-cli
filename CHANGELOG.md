@@ -12,10 +12,14 @@ Format: date-based versioning (`YYYY.M.DD-N`), aligned with [bitget-wallet-skill
 - Version scheme aligned to date-based format (`YYYY.M.DD-N`), matching the skill repo
 - Added `CHANGELOG.md`
 
+### Added
+- `bgw calldata` command — generate unsigned swap transaction data (was missing, skill had it)
+- `--deadline` parameter for calldata command (transaction expiry in seconds, mitigates sandwich attacks)
+
 ### Audit
-- ✅ No functional changes
+- ✅ `cli.py`: +45 lines — new `calldata` subcommand + argparse registration
 - ✅ No dependency changes
-- ✅ Version metadata only
+- ✅ Aligns with skill repo feature parity
 
 ---
 
