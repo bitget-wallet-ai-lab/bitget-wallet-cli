@@ -14,12 +14,15 @@ Format: date-based versioning (`YYYY.M.DD-N`), aligned with [bitget-wallet-skill
 
 ### Added
 - `bgw calldata` command — generate unsigned swap transaction data (was missing, skill had it)
+- `bgw batch-price` command — batch get token info for multiple tokens
 - `--deadline` parameter for calldata command (transaction expiry in seconds, mitigates sandwich attacks)
+- `--from-address`, `--from-symbol`, `--to-symbol` parameters for swap command
+- `--from-symbol`, `--to-symbol` parameters for calldata command
 
 ### Audit
-- ✅ `cli.py`: +45 lines — new `calldata` subcommand + argparse registration
+- ✅ `cli.py`: new commands + parameter additions, no breaking changes
 - ✅ No dependency changes
-- ✅ Aligns with skill repo feature parity
+- ✅ Full parity with skill repo commands and parameters
 
 ---
 

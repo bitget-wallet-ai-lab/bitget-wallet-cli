@@ -225,6 +225,27 @@ def cmd_history(args):
         print(f"{t.get('symbol', '?'):<12} {t.get('chain', '?'):<8} {t.get('name', '?'):<30} {t.get('createTime', '?')}")
 
 
+def cmd_batch_price(args):
+    """Batch get token info for multiple tokens."""
+    tokens = []
+    for item in args.tokens:
+        chain, contract = item.split(":", 1)
+        tokens.append({"chain": chain, "contract": contract})
+    result = request("/bgw-pro/market/v3/coin/batchGetBaseInfo", {"list": tokens})
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    items = result.get("data", {}).get("list", [])
+    if not items:
+        print("No token data returned.")
+        return
+    print(f"\n{'Symbol':<12} {'Price':<16} {'24h Change':<14} {'Chain'}")
+    print("-" * 56)
+    for t in items:
+        print(f"{t.get('symbol', '?'):<12} {fmt_price(t.get('price')):<16} "
+              f"{fmt_change(t.get('change_24h')):<14} {t.get('chain', '?')}")
+
+
 def cmd_swap(args):
     """Get swap quote."""
     body = {
@@ -235,6 +256,12 @@ def cmd_swap(args):
         "fromAmount": args.amount,
         "estimateGas": True,
     }
+    if args.from_address:
+        body["fromAddress"] = args.from_address
+    if args.from_symbol:
+        body["fromSymbol"] = args.from_symbol
+    if args.to_symbol:
+        body["toSymbol"] = args.to_symbol
     result = request("/bgw-pro/swapx/pro/quote", body)
     if args.json:
         print(json.dumps(result, indent=2))
@@ -267,6 +294,10 @@ def cmd_calldata(args):
         body["slippage"] = args.slippage
     if args.deadline:
         body["deadline"] = args.deadline
+    if args.from_symbol:
+        body["fromSymbol"] = args.from_symbol
+    if args.to_symbol:
+        body["toSymbol"] = args.to_symbol
     result = request("/bgw-pro/swapx/pro/swap", body)
     if args.json:
         print(json.dumps(result, indent=2))
@@ -402,6 +433,11 @@ def main():
     p.add_argument("-n", "--limit", type=int, default=10, help="Number of records")
     p.set_defaults(func=cmd_history)
 
+    # batch-price
+    p = sub.add_parser("batch-price", help="Batch get token info for multiple tokens")
+    p.add_argument("tokens", nargs="+", help="chain:contract pairs (e.g. sol: eth:0xdAC...)")
+    p.set_defaults(func=cmd_batch_price)
+
     # swap
     p = sub.add_parser("swap", help="Get swap quote")
     p.add_argument("--from-chain", required=True, help="Source chain")
@@ -410,6 +446,9 @@ def main():
     p.add_argument("--to-contract", required=True, help="Dest token contract")
     p.add_argument("--amount", required=True,
                    help="Human-readable amount (0.1 = 0.1 USDT, NOT wei/lamports)")
+    p.add_argument("--from-address", default="", help="Sender wallet (for more accurate quotes)")
+    p.add_argument("--from-symbol", default="", help="Source token symbol")
+    p.add_argument("--to-symbol", default="", help="Dest token symbol")
     p.set_defaults(func=cmd_swap)
 
     # liquidity
@@ -433,6 +472,8 @@ def main():
     p.add_argument("--deadline", type=int,
                    help="Transaction deadline in seconds (default: API default 600s). "
                         "Recommended: 300s for safety against sandwich attacks.")
+    p.add_argument("--from-symbol", default="", help="Source token symbol")
+    p.add_argument("--to-symbol", default="", help="Dest token symbol")
     p.set_defaults(func=cmd_calldata)
 
     # send (broadcast signed tx)
