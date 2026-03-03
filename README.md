@@ -68,7 +68,7 @@ bgw top gainers --json | jq '.[0]'
 
 ## Supported Chains
 
-`eth` · `sol` · `bnb` · `base` · `arbitrum` · `trx` · `ton` · `sui` · `optimism`
+`eth` · `sol` · `bnb` · `base` · `arbitrum` · `trx` · `ton` · `suinet` · `optimism` · `matic`
 
 Use empty contract (or omit) for native tokens (ETH, SOL, BNB, etc.).
 

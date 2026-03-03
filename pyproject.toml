@@ -1,6 +1,6 @@
 [project]
 name = "bitget-wallet-cli"
-version = "1.0.0"
+version = "2026.3.3-1"
 description = "Bitget Wallet CLI — on-chain data at your fingertips"
 readme = "README.md"
 requires-python = ">=3.11"
