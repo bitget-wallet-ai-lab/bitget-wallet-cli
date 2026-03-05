@@ -61,14 +61,30 @@ bgw swap --from-chain sol --to-chain eth --from-contract "" --to-contract 0xdAC1
 # Liquidity pools
 bgw lp sol <contract>
 
+# Order Mode — gasless + cross-chain swaps
+bgw order-quote --from-chain base --from-contract 0x833589f... --to-chain bnb \
+  --to-contract 0x55d398... --amount 10 --from-address 0xYourAddr
+
+bgw order-create --from-chain base --from-contract 0x833589f... --to-chain bnb \
+  --to-contract 0x55d398... --amount 10 --from-address 0xYourAddr \
+  --to-address 0xYourAddr --market bkbridgev3.liqbridge --feature no_gas
+
+bgw order-status --order-id <orderId>
+
 # Raw JSON output (pipe-friendly)
 bgw price sol --json
 bgw top gainers --json | jq '.[0]'
 ```
 
+## ✨ Order Mode — Gasless & Cross-Chain
+
+- **Gasless (EIP-7702)** — swap with zero native token balance; gas deducted from input token
+- **Cross-Chain** — swap tokens across chains in a single order, no manual bridging
+- Supported on EVM chains: Ethereum, Base, BNB Chain, Arbitrum, Polygon, Morph
+
 ## Supported Chains
 
-`eth` · `sol` · `bnb` · `base` · `arbitrum` · `trx` · `ton` · `suinet` · `optimism` · `matic`
+`eth` · `sol` · `bnb` · `base` · `arbitrum` · `trx` · `ton` · `suinet` · `optimism` · `matic` · `morph`
 
 Use empty contract (or omit) for native tokens (ETH, SOL, BNB, etc.).
 
@@ -86,9 +102,13 @@ Use empty contract (or omit) for native tokens (ETH, SOL, BNB, etc.).
 | `bgw batch-tx` | Batch transaction stats for multiple tokens |
 | `bgw history` | Discover new tokens by timestamp |
 | `bgw send` | Broadcast signed transactions (MEV-protected) |
+| `bgw lp` | Liquidity pool information |
+| `bgw order-quote` | Order mode quote (gasless + cross-chain aware) |
+| `bgw order-create` | Create order with unsigned tx/signature data |
+| `bgw order-submit` | Submit signed transactions for an order |
+| `bgw order-status` | Query order lifecycle status |
 
 > ⚠️ **Swap amounts are human-readable** — use `--amount 0.1` for 0.1 USDT, NOT `100000000000000000`. Response amounts are also human-readable.
-| `bgw lp` | Liquidity pool information |
 
 ## Environment Variables
 

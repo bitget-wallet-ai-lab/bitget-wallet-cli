@@ -12,6 +12,7 @@ CHAINS = {
     "eth": "1", "sol": "100278", "bnb": "56", "base": "8453",
     "arbitrum": "42161", "trx": "6", "ton": "100280",
     "suinet": "100281", "optimism": "10", "matic": "137",
+    "morph": "morph",
 }
 
 
@@ -338,6 +339,110 @@ def cmd_liquidity(args):
         print(f"{name:<30} {liq:<16} {vol:<16}")
 
 
+def cmd_order_quote(args):
+    """Get order-mode swap quote (supports cross-chain + gasless)."""
+    body = {
+        "fromChain": args.from_chain,
+        "fromContract": args.from_contract or "",
+        "fromAmount": args.amount,
+        "toChain": args.to_chain or args.from_chain,
+        "toContract": args.to_contract,
+        "fromAddress": args.from_address,
+    }
+    if args.to_address:
+        body["toAddress"] = args.to_address
+    if args.fee_rate:
+        body["feeRate"] = args.fee_rate
+    result = request("/bgw-pro/swapx/order/getSwapPrice", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print(f"Quote failed: {result.get('title', 'unknown error')}", file=sys.stderr)
+        sys.exit(1)
+    print(f"\n💱 Order Quote")
+    print(f"{'To Amount:':<16} {data.get('toAmount', '?')}")
+    print(f"{'Market:':<16} {data.get('market', '?')}")
+    print(f"{'Features:':<16} {data.get('features', [])}")
+    print(f"{'EIP-7702:':<16} {'Bound' if data.get('eip7702Bindend') else 'Not bound'}")
+    fee = data.get("fee", {})
+    if fee:
+        print(f"{'Fees:':<16} ${fee.get('totalAmountInUsd', '?')}")
+
+
+def cmd_order_create(args):
+    """Create order and receive transaction data for signing."""
+    body = {
+        "fromChain": args.from_chain,
+        "fromContract": args.from_contract or "",
+        "fromAmount": args.amount,
+        "toChain": args.to_chain or args.from_chain,
+        "toContract": args.to_contract,
+        "fromAddress": args.from_address,
+        "toAddress": args.to_address or args.from_address,
+        "market": args.market,
+    }
+    if args.slippage:
+        body["slippage"] = str(args.slippage)
+    if args.fee_rate:
+        body["feeRate"] = args.fee_rate
+    if args.feature:
+        body["feature"] = args.feature
+    result = request("/bgw-pro/swapx/order/makeSwapOrder", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print(f"Create failed: {result.get('title', 'unknown error')}", file=sys.stderr)
+        sys.exit(1)
+    sigs = data.get("signatures", [])
+    txs = data.get("txs", [])
+    print(f"\n📝 Order Created")
+    print(f"{'Order ID:':<16} {data.get('orderId', '?')}")
+    print(f"{'Signatures:':<16} {len(sigs)}")
+    print(f"{'Transactions:':<16} {len(txs)}")
+    print(f"{'Mode:':<16} {'Gasless' if sigs else 'Normal'}")
+
+
+def cmd_order_submit(args):
+    """Submit signed transactions for an order."""
+    result = request("/bgw-pro/swapx/order/submitSwapOrder", {
+        "orderId": args.order_id,
+        "signedTxs": args.signed_txs,
+    })
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    if result.get("status") == 0:
+        print(f"✅ Order {args.order_id} submitted successfully")
+    else:
+        print(f"❌ Submit failed: {result.get('title', 'unknown error')}", file=sys.stderr)
+
+
+def cmd_order_status(args):
+    """Query order status."""
+    result = request("/bgw-pro/swapx/order/getSwapOrder", {"orderId": args.order_id})
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print(f"Status query failed: {result.get('title', 'unknown error')}", file=sys.stderr)
+        sys.exit(1)
+    status = data.get("status", "?")
+    icon = {"success": "✅", "failed": "❌", "processing": "⏳", "init": "📝"}.get(status, "❓")
+    print(f"\n{icon} Order Status: {status}")
+    print(f"{'Order ID:':<16} {data.get('orderId', '?')}")
+    print(f"{'From:':<16} {data.get('fromAmount', '?')} ({data.get('fromChain', '?')})")
+    print(f"{'To:':<16} {data.get('toAmount', '?')} ({data.get('toChain', '?')})")
+    if data.get("receiveAmount") and str(data["receiveAmount"]) != "0":
+        print(f"{'Received:':<16} {data['receiveAmount']}")
+    for tx in data.get("txs", []):
+        print(f"  TX [{tx.get('stage', '?')}]: {tx.get('chain', '?')} {tx.get('txId', '?')}")
+
+
 def cmd_send(args):
     """Broadcast signed transactions via MEV-protected endpoint."""
     txs = []
@@ -474,6 +579,44 @@ def main():
     p.add_argument("--from-symbol", default="", help="Source token symbol")
     p.add_argument("--to-symbol", default="", help="Dest token symbol")
     p.set_defaults(func=cmd_calldata)
+
+    # order-quote
+    p = sub.add_parser("order-quote", help="Get order-mode swap quote (gasless + cross-chain)")
+    p.add_argument("--from-chain", required=True, help="Source chain")
+    p.add_argument("--from-contract", default="", help="Source token contract")
+    p.add_argument("--to-chain", default="", help="Dest chain (default: same)")
+    p.add_argument("--to-contract", required=True, help="Dest token contract")
+    p.add_argument("--amount", required=True, help="Human-readable amount")
+    p.add_argument("--from-address", required=True, help="Sender wallet address")
+    p.add_argument("--to-address", default="", help="Recipient address (required for cross-chain to non-EVM)")
+    p.add_argument("--fee-rate", default="", help="B2B fee rate")
+    p.set_defaults(func=cmd_order_quote)
+
+    # order-create
+    p = sub.add_parser("order-create", help="Create order with unsigned tx/signature data")
+    p.add_argument("--from-chain", required=True, help="Source chain")
+    p.add_argument("--from-contract", default="", help="Source token contract")
+    p.add_argument("--to-chain", default="", help="Dest chain (default: same)")
+    p.add_argument("--to-contract", required=True, help="Dest token contract")
+    p.add_argument("--amount", required=True, help="Human-readable amount")
+    p.add_argument("--from-address", required=True, help="Sender wallet address")
+    p.add_argument("--to-address", default="", help="Recipient address")
+    p.add_argument("--market", required=True, help="Market from order-quote")
+    p.add_argument("--slippage", type=float, help="Slippage tolerance %")
+    p.add_argument("--fee-rate", default="", help="B2B fee rate")
+    p.add_argument("--feature", default="", help="Feature flag (e.g. no_gas for gasless)")
+    p.set_defaults(func=cmd_order_create)
+
+    # order-submit
+    p = sub.add_parser("order-submit", help="Submit signed transactions for an order")
+    p.add_argument("--order-id", required=True, help="Order ID from order-create")
+    p.add_argument("--signed-txs", nargs="+", required=True, help="Signed transaction data")
+    p.set_defaults(func=cmd_order_submit)
+
+    # order-status
+    p = sub.add_parser("order-status", help="Query order lifecycle status")
+    p.add_argument("--order-id", required=True, help="Order ID")
+    p.set_defaults(func=cmd_order_status)
 
     # send (broadcast signed tx)
     p = sub.add_parser("send", help="Broadcast signed transactions (MEV-protected)")
