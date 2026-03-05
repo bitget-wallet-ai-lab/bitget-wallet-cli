@@ -6,6 +6,24 @@ Format: date-based versioning (`YYYY.M.DD-N`), aligned with [bitget-wallet-skill
 
 ---
 
+## [2026.3.5-1] - 2026-03-05
+
+### Added
+- **Order Mode API**: 4 new commands for gasless + cross-chain swaps
+  - `bgw order-quote` — get swap price with cross-chain and gasless support
+  - `bgw order-create` — create order, receive unsigned tx/signature data
+  - `bgw order-submit` — submit signed transactions
+  - `bgw order-status` — query order lifecycle status (init → processing → success/failed)
+- New chain: Morph (`morph`)
+
+### Audit
+- ✅ `cli.py`: 4 new commands + argparse entries, no existing logic changed
+- ✅ All new endpoints use same `bopenapi.bgwapi.io` base URL
+- ✅ Same auth mechanism (HMAC-SHA256 + Partner-Code)
+- ✅ No new dependencies
+
+---
+
 ## [2026.3.3-1] - 2026-03-03
 
 ### Changed
