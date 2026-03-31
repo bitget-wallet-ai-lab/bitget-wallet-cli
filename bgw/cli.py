@@ -443,6 +443,328 @@ def cmd_order_status(args):
         print(f"  TX [{tx.get('stage', '?')}]: {tx.get('chain', '?')} {tx.get('txId', '?')}")
 
 
+def cmd_search(args):
+    """Search for tokens by keyword."""
+    body = {"keyword": args.keyword, "limit": args.limit}
+    if args.chain:
+        body["chain"] = args.chain
+    if args.order_by:
+        body["orderBy"] = args.order_by
+    result = request("/bgw-pro/market/v3/coin/search", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    items = result.get("data", {}).get("list", [])
+    if not items:
+        print("No tokens found.")
+        return
+    print(f"\n{'Symbol':<12} {'Name':<20} {'Chain':<10} {'Contract':<44} {'Price'}")
+    print("-" * 100)
+    for t in items[:args.limit]:
+        symbol = t.get("symbol", "?")
+        name = t.get("name", "?")[:18]
+        chain = t.get("chain", "?")
+        contract = t.get("contract", "")[:42]
+        price = fmt_price(t.get("price"))
+        print(f"{symbol:<12} {name:<20} {chain:<10} {contract:<44} {price}")
+
+
+def cmd_market(args):
+    """Get market info for a token."""
+    result = request("/bgw-pro/market/v3/coin/getMarketInfo",
+                     {"chain": args.chain, "contract": args.contract})
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print("No market data available.")
+        return
+    print(f"\n📊 Market Info: {args.chain}:{args.contract}")
+    print(f"{'Price:':<20} {fmt_price(data.get('price'))}")
+    print(f"{'Market Cap:':<20} {fmt_volume(data.get('marketCap') or data.get('market_cap'))}")
+    print(f"{'FDV:':<20} {fmt_volume(data.get('fdv') or data.get('fullyDilutedValuation'))}")
+    print(f"{'Liquidity:':<20} {fmt_volume(data.get('liquidity'))}")
+    print(f"{'Holders:':<20} {fmt_number(data.get('holders'))}")
+    print(f"{'24h Change:':<20} {fmt_change(data.get('change_24h') or data.get('change24h'))}")
+    narratives = data.get("narratives") or data.get("tags") or []
+    if narratives:
+        tags = ", ".join(narratives) if isinstance(narratives, list) else str(narratives)
+        print(f"{'Narratives:':<20} {tags}")
+
+
+def cmd_dev(args):
+    """Get developer activity and rug rate analysis."""
+    body = {"chain": args.chain, "contract": args.contract, "limit": args.limit}
+    if args.migrated is not None:
+        body["migrated"] = args.migrated
+    result = request("/bgw-pro/market/v3/coin/dev", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print("No developer data available.")
+        return
+    # Summary
+    summary = data.get("summary") or data
+    rug_rate = summary.get("rugRate") or summary.get("rug_rate")
+    total = summary.get("totalProjects") or summary.get("total")
+    if rug_rate is not None:
+        print(f"\n🔍 Developer Analysis: {args.chain}:{args.contract}")
+        print(f"{'Rug Rate:':<20} {rug_rate}%")
+    if total is not None:
+        print(f"{'Total Projects:':<20} {total}")
+    # Project list
+    projects = data.get("list") or data.get("projects") or []
+    if projects:
+        print(f"\n{'Symbol':<12} {'Chain':<10} {'Status':<12} {'MC':<14} {'Created'}")
+        print("-" * 64)
+        for p in projects[:args.limit]:
+            symbol = p.get("symbol", "?")
+            chain = p.get("chain", "?")
+            status = p.get("status", "?")
+            mc = fmt_volume(p.get("marketCap") or p.get("market_cap"))
+            created = p.get("createTime") or p.get("created", "?")
+            print(f"{symbol:<12} {chain:<10} {status:<12} {mc:<14} {created}")
+
+
+def cmd_launchpad(args):
+    """Get launchpad token listings."""
+    body = {"chain": args.chain, "limit": args.limit}
+    if args.platforms:
+        body["platforms"] = args.platforms
+    if args.stage:
+        body["stage"] = args.stage
+    if args.mc_min is not None:
+        body["mcMin"] = args.mc_min
+    if args.mc_max is not None:
+        body["mcMax"] = args.mc_max
+    if args.holder_min is not None:
+        body["holderMin"] = args.holder_min
+    if args.holder_max is not None:
+        body["holderMax"] = args.holder_max
+    if args.lp_min is not None:
+        body["lpMin"] = args.lp_min
+    if args.lp_max is not None:
+        body["lpMax"] = args.lp_max
+    if args.keywords:
+        body["keywords"] = args.keywords
+    result = request("/bgw-pro/market/v3/launchpad/tokens", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    items = result.get("data", {}).get("list", [])
+    if not items:
+        print("No launchpad tokens found.")
+        return
+    print(f"\n🚀 Launchpad Tokens")
+    print(f"{'Symbol':<12} {'MC':<14} {'Holders':<10} {'LP':<14} {'Progress':<12} {'Platform'}")
+    print("-" * 78)
+    for t in items[:args.limit]:
+        symbol = t.get("symbol", "?")
+        mc = fmt_volume(t.get("marketCap") or t.get("market_cap"))
+        holders = fmt_number(t.get("holders"))
+        lp = fmt_volume(t.get("liquidity") or t.get("lp"))
+        progress = t.get("progress", "?")
+        if isinstance(progress, (int, float)):
+            progress = f"{progress:.1f}%"
+        platform = t.get("platform", "?")
+        print(f"{symbol:<12} {mc:<14} {holders:<10} {lp:<14} {progress:<12} {platform}")
+
+
+def cmd_smart_kline(args):
+    """Get simplified K-line with hot level."""
+    body = {"chain": args.chain, "contract": args.contract, "period": args.period}
+    if args.size:
+        body["size"] = args.size
+    result = request("/bgw-pro/market/v2/coin/SimpleKline", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print("No kline data.")
+        return
+    hot_level = data.get("hotLevel") or data.get("hot_level")
+    if hot_level is not None:
+        print(f"\n🔥 Hot Level: {hot_level}")
+    candles = data.get("list") or data.get("klines") or []
+    if candles:
+        print(f"\n{'Time':<22} {'Open':<14} {'High':<14} {'Low':<14} {'Close':<14} {'Volume':<14}")
+        print("-" * 94)
+        from datetime import datetime
+        for c in candles[-10:]:
+            ts = int(c.get("time", 0))
+            if ts > 1e12:
+                ts = ts / 1000
+            t = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") if ts else "?"
+            print(f"{t:<22} {fmt_price(c.get('open')):<14} {fmt_price(c.get('high')):<14} "
+                  f"{fmt_price(c.get('low')):<14} {fmt_price(c.get('close')):<14} "
+                  f"{fmt_volume(c.get('volume')):<14}")
+
+
+def cmd_dynamics(args):
+    """Get trading dynamics across time windows."""
+    result = request("/bgw-pro/market/v2/coin/GetTradingDynamics",
+                     {"chain": args.chain, "contract": args.contract})
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print("No trading dynamics data.")
+        return
+    print(f"\n📈 Trading Dynamics: {args.chain}:{args.contract}")
+    for period in ["5m", "1h", "4h", "24h"]:
+        p = data.get(period, {})
+        if p:
+            print(f"\n  {period}:")
+            print(f"    Buy Volume:    {fmt_volume(p.get('buyVolume') or p.get('buy_volume'))}")
+            print(f"    Sell Volume:   {fmt_volume(p.get('sellVolume') or p.get('sell_volume'))}")
+            print(f"    Buyers:        {fmt_number(p.get('buyers'))}")
+            print(f"    Sellers:       {fmt_number(p.get('sellers'))}")
+            print(f"    Price Change:  {fmt_change(p.get('priceChange') or p.get('price_change'))}")
+    # Fallback: if data is a list of windows
+    if isinstance(data, list):
+        for item in data:
+            period = item.get("period", "?")
+            print(f"\n  {period}:")
+            print(f"    Buy Volume:    {fmt_volume(item.get('buyVolume'))}")
+            print(f"    Sell Volume:   {fmt_volume(item.get('sellVolume'))}")
+            print(f"    Buyers:        {fmt_number(item.get('buyers'))}")
+            print(f"    Sellers:       {fmt_number(item.get('sellers'))}")
+
+
+def cmd_txlist(args):
+    """Get transaction list for a token."""
+    body = {
+        "chain": args.chain,
+        "contract": args.contract,
+        "page": args.page,
+        "size": args.size,
+    }
+    if args.side:
+        body["side"] = args.side
+    if args.period:
+        body["period"] = args.period
+    if args.tags:
+        body["tags"] = args.tags
+    result = request("/bgw-pro/market/v2/coin/TransactionList", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    items = result.get("data", {}).get("list", [])
+    if not items:
+        print("No transactions found.")
+        return
+    print(f"\n{'Time':<20} {'Side':<6} {'Amount':<16} {'Price':<16} {'Address'}")
+    print("-" * 80)
+    from datetime import datetime
+    for tx in items[:args.size]:
+        ts = int(tx.get("time", 0))
+        if ts > 1e12:
+            ts = ts / 1000
+        t = datetime.fromtimestamp(ts).strftime("%m-%d %H:%M") if ts else "?"
+        side = tx.get("side", "?")
+        icon = "🟢" if side.lower() == "buy" else "🔴"
+        amount = fmt_volume(tx.get("amount") or tx.get("tokenAmount"))
+        price = fmt_price(tx.get("price"))
+        addr = (tx.get("address") or tx.get("maker", "?"))[:16]
+        print(f"{t:<20} {icon} {side:<4} {amount:<16} {price:<16} {addr}")
+
+
+def cmd_holders(args):
+    """Get holder distribution and top holders."""
+    body = {"chain": args.chain, "contract": args.contract, "sort": args.sort}
+    if args.special:
+        body["special"] = args.special
+    result = request("/bgw-pro/market/v2/GetHoldersInfo", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print("No holder data available.")
+        return
+    print(f"\n👥 Holder Info: {args.chain}:{args.contract}")
+    holder_count = data.get("holderCount") or data.get("holder_count")
+    top10_pct = data.get("top10Percent") or data.get("top10_percent")
+    if holder_count is not None:
+        print(f"{'Total Holders:':<20} {fmt_number(holder_count)}")
+    if top10_pct is not None:
+        print(f"{'Top 10 Hold %:':<20} {top10_pct}%")
+    holders = data.get("list") or data.get("holders") or []
+    if holders:
+        print(f"\n{'#':<4} {'Address':<44} {'Holding %':<12} {'Amount'}")
+        print("-" * 76)
+        for i, h in enumerate(holders[:20], 1):
+            addr = (h.get("address") or "?")[:42]
+            pct = h.get("percent") or h.get("holdingPercent") or "?"
+            amount = fmt_volume(h.get("amount") or h.get("balance"))
+            print(f"{i:<4} {addr:<44} {pct:<12} {amount}")
+
+
+def cmd_profit(args):
+    """Get profit address analysis."""
+    result = request("/bgw-pro/market/v2/coin/GetProfitAddressAnalysis",
+                     {"chain": args.chain, "contract": args.contract})
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print("No profit data available.")
+        return
+    print(f"\n💰 Profit Analysis: {args.chain}:{args.contract}")
+    for key, label in [
+        ("profitCount", "Profitable Addresses"),
+        ("lossCount", "Loss Addresses"),
+        ("profitPercent", "Profit %"),
+        ("avgProfit", "Avg Profit"),
+        ("avgLoss", "Avg Loss"),
+        ("totalProfit", "Total Profit"),
+        ("totalLoss", "Total Loss"),
+    ]:
+        val = data.get(key)
+        if val is None:
+            # Try snake_case variant
+            snake = "".join(f"_{c.lower()}" if c.isupper() else c for c in key)
+            val = data.get(snake)
+        if val is not None:
+            if "percent" in key.lower() or "Percent" in key:
+                print(f"  {label:<26} {val}%")
+            elif "count" in key.lower() or "Count" in key:
+                print(f"  {label:<26} {fmt_number(val)}")
+            else:
+                print(f"  {label:<26} {fmt_volume(val)}")
+
+
+def cmd_top_profit(args):
+    """Get top profitable addresses for a token."""
+    result = request("/bgw-pro/market/v2/coin/GetTopProfit",
+                     {"chain": args.chain, "contract": args.contract})
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    items = result.get("data", {}).get("list", [])
+    if not items:
+        items = result.get("data", []) if isinstance(result.get("data"), list) else []
+    if not items:
+        print("No top profit data available.")
+        return
+    print(f"\n🏆 Top Profitable Addresses: {args.chain}:{args.contract}")
+    print(f"{'#':<4} {'Address':<44} {'Profit':<16} {'ROI'}")
+    print("-" * 76)
+    for i, a in enumerate(items[:20], 1):
+        addr = (a.get("address") or "?")[:42]
+        profit = fmt_volume(a.get("profit") or a.get("realizedProfit"))
+        roi = a.get("roi") or a.get("profitPercent") or "?"
+        if isinstance(roi, (int, float)):
+            roi = f"{roi:.1f}%"
+        print(f"{i:<4} {addr:<44} {profit:<16} {roi}")
+
+
 def cmd_send(args):
     """Broadcast signed transactions via MEV-protected endpoint."""
     txs = []
@@ -617,6 +939,88 @@ def main():
     p = sub.add_parser("order-status", help="Query order lifecycle status")
     p.add_argument("--order-id", required=True, help="Order ID")
     p.set_defaults(func=cmd_order_status)
+
+    # search
+    p = sub.add_parser("search", help="Search tokens by keyword")
+    p.add_argument("keyword", help="Search keyword (symbol, name, contract)")
+    p.add_argument("--chain", default="", help="Filter by chain")
+    p.add_argument("-n", "--limit", type=int, default=20, help="Number of results")
+    p.add_argument("--order-by", default="", help="Order by field")
+    p.set_defaults(func=cmd_search)
+
+    # market
+    p = sub.add_parser("market", help="Get market info (price, MC, FDV, liquidity)")
+    p.add_argument("chain")
+    p.add_argument("contract")
+    p.set_defaults(func=cmd_market)
+
+    # dev
+    p = sub.add_parser("dev", help="Developer activity and rug rate analysis")
+    p.add_argument("chain")
+    p.add_argument("contract")
+    p.add_argument("-n", "--limit", type=int, default=30, help="Number of projects")
+    p.add_argument("--migrated", action="store_true", default=None, help="Filter migrated only")
+    p.set_defaults(func=cmd_dev)
+
+    # launchpad
+    p = sub.add_parser("launchpad", help="Launchpad token listings")
+    p.add_argument("--chain", default="sol", help="Chain (default: sol)")
+    p.add_argument("--platforms", default="", help="Platform filter")
+    p.add_argument("--stage", default="", help="Stage filter")
+    p.add_argument("--mc-min", type=float, default=None, help="Min market cap")
+    p.add_argument("--mc-max", type=float, default=None, help="Max market cap")
+    p.add_argument("--holder-min", type=int, default=None, help="Min holders")
+    p.add_argument("--holder-max", type=int, default=None, help="Max holders")
+    p.add_argument("--lp-min", type=float, default=None, help="Min liquidity")
+    p.add_argument("--lp-max", type=float, default=None, help="Max liquidity")
+    p.add_argument("--keywords", default="", help="Keyword filter")
+    p.add_argument("-n", "--limit", type=int, default=20, help="Number of results")
+    p.set_defaults(func=cmd_launchpad)
+
+    # smart-kline
+    p = sub.add_parser("smart-kline", help="Simplified K-line with hot level")
+    p.add_argument("chain")
+    p.add_argument("contract")
+    p.add_argument("-p", "--period", default="5m", help="Period (1m,5m,15m,30m,1h,4h,1d)")
+    p.add_argument("-n", "--size", type=int, default=None, help="Number of candles")
+    p.set_defaults(func=cmd_smart_kline)
+
+    # dynamics
+    p = sub.add_parser("dynamics", help="Trading dynamics across time windows")
+    p.add_argument("chain")
+    p.add_argument("contract")
+    p.set_defaults(func=cmd_dynamics)
+
+    # txlist
+    p = sub.add_parser("txlist", help="Transaction list for a token")
+    p.add_argument("chain")
+    p.add_argument("contract")
+    p.add_argument("--page", type=int, default=1, help="Page number")
+    p.add_argument("--size", type=int, default=20, help="Page size")
+    p.add_argument("--side", default="", help="Filter by side (buy/sell)")
+    p.add_argument("--period", default="", help="Time period filter")
+    p.add_argument("--tags", nargs="+", default=None, help="Tag filters")
+    p.set_defaults(func=cmd_txlist)
+
+    # holders
+    p = sub.add_parser("holders", help="Holder distribution and top holders")
+    p.add_argument("chain")
+    p.add_argument("contract")
+    p.add_argument("--sort", default="holding_desc", help="Sort order (default: holding_desc)")
+    p.add_argument("--special", default="", help="Special filter")
+    p.set_defaults(func=cmd_holders)
+
+    # profit
+    p = sub.add_parser("profit", help="Profit address analysis")
+    p.add_argument("chain")
+    p.add_argument("contract")
+    p.set_defaults(func=cmd_profit)
+
+    # top-profit
+    p = sub.add_parser("top-profit", help="Top profitable addresses")
+    p.add_argument("chain")
+    p.add_argument("contract")
+    p.set_defaults(func=cmd_top_profit)
 
     # send (broadcast signed tx)
     p = sub.add_parser("send", help="Broadcast signed transactions (MEV-protected)")
