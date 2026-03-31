@@ -762,9 +762,8 @@ def cmd_balance(args):
     if args.json:
         print(json.dumps(result, indent=2))
         return
-    items = result.get("data", {}).get("list", [])
-    if not items:
-        items = result.get("data", []) if isinstance(result.get("data"), list) else []
+    raw = result.get("data", [])
+    items = raw if isinstance(raw, list) else raw.get("list", []) if isinstance(raw, dict) else []
     if not items:
         print("No balance data.")
         return
