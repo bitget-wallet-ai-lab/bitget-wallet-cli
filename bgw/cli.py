@@ -68,14 +68,16 @@ def cmd_info(args):
 
 
 def cmd_top(args):
-    """Get top gainers or losers."""
-    name = "topGainers" if args.type == "gainers" else "topLosers"
+    """Get top gainers, losers, or hotpicks."""
+    name_map = {"gainers": "topGainers", "losers": "topLosers", "hotpicks": "hotpicks"}
+    name = name_map[args.type]
     result = request("/bgw-pro/market/v3/topRank/detail", {"name": name})
     items = result.get("data", {}).get("list", [])
     if args.json:
         print(json.dumps(items[:args.limit], indent=2))
     else:
-        title = "🟢 Top Gainers" if args.type == "gainers" else "🔴 Top Losers"
+        title_map = {"gainers": "🟢 Top Gainers", "losers": "🔴 Top Losers", "hotpicks": "🔥 Hot Picks"}
+        title = title_map[args.type]
         print(f"\n{title}")
         print(f"{'#':<4} {'Symbol':<12} {'Price':<16} {'24h Change':<14} {'Volume':<12}")
         print("-" * 60)
@@ -319,6 +321,47 @@ def cmd_calldata(args):
         print(f"  [{i}] to={tx.get('to', '?')[:20]}... value={tx.get('value', '0')}")
 
 
+def cmd_swapr(args):
+    """Get reverse quote swap (quote + calldata in one call)."""
+    body = {
+        "fromChain": args.from_chain,
+        "fromContract": args.from_contract or "",
+        "toContract": args.to_contract,
+        "amount": args.amount,
+        "requestMode": args.request_mode,
+        "fromAddress": args.from_address,
+        "toAddress": args.to_address,
+        "feeRate": args.fee_rate,
+    }
+    if args.slippage:
+        body["slippage"] = args.slippage
+    if args.deadline:
+        body["deadline"] = args.deadline
+    if args.executor_address:
+        body["executorAddress"] = args.executor_address
+    result = request("/bgw-pro/swapx/pro/swapr", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print("No reverse quote available.", file=sys.stderr)
+        sys.exit(1)
+    print(f"\n💱 Reverse Quote Swap")
+    print(f"{'Amount In:':<20} {data.get('amountIn', '?')}")
+    print(f"{'Expected Out:':<20} {data.get('expectedAmountOut', '?')}")
+    print(f"{'Min Out:':<20} {data.get('minAmountOut', '?')}")
+    print(f"{'Price Impact:':<20} {data.get('priceImpact', '?')}%")
+    print(f"{'Market:':<20} {data.get('market', '?')}")
+    fee = data.get("fee", {})
+    if fee:
+        print(f"{'Fee:':<20} {json.dumps(fee)}")
+    txs = data.get("txs", [])
+    print(f"{'Transactions:':<20} {len(txs)}")
+    for i, tx in enumerate(txs):
+        print(f"  [{i}] to={tx.get('to', '?')[:20]}... value={tx.get('value', '0')}")
+
+
 def cmd_liquidity(args):
     """Get liquidity pools."""
     result = request("/bgw-pro/market/v3/poolList",
@@ -502,7 +545,7 @@ def main():
 
     # top
     p = sub.add_parser("top", help="Top gainers or losers")
-    p.add_argument("type", choices=["gainers", "losers"], default="gainers", nargs="?")
+    p.add_argument("type", choices=["gainers", "losers", "hotpicks"], default="gainers", nargs="?")
     p.add_argument("-n", "--limit", type=int, default=10, help="Number of results")
     p.set_defaults(func=cmd_top)
 
@@ -579,6 +622,25 @@ def main():
     p.add_argument("--from-symbol", default="", help="Source token symbol")
     p.add_argument("--to-symbol", default="", help="Dest token symbol")
     p.set_defaults(func=cmd_calldata)
+
+    # swapr (reverse quote swap)
+    p = sub.add_parser("swapr", help="Reverse quote swap (quote + calldata in one call)")
+    p.add_argument("--from-chain", required=True, help="Chain identifier")
+    p.add_argument("--from-contract", default="", help="Source token contract (omit for native)")
+    p.add_argument("--to-contract", required=True, help="Dest token contract")
+    p.add_argument("--amount", required=True,
+                   help="Amount (meaning depends on --request-mode)")
+    p.add_argument("--request-mode", required=True, choices=["exactIn", "minAmountOut"],
+                   help="exactIn: amount is input; minAmountOut: amount is desired min output")
+    p.add_argument("--from-address", required=True, help="Sender wallet address")
+    p.add_argument("--to-address", required=True, help="Receiver wallet address")
+    p.add_argument("--fee-rate", required=True, type=float,
+                   help="Fee rate as decimal ratio (0.05 = 5%%, 0 for no fee)")
+    p.add_argument("--slippage", default="", help="Slippage percentage (default: 0.5)")
+    p.add_argument("--deadline", type=int, help="Tx expiry in seconds (default: 600)")
+    p.add_argument("--executor-address", default="",
+                   help="If tx sender differs from --from-address")
+    p.set_defaults(func=cmd_swapr)
 
     # order-quote
     p = sub.add_parser("order-quote", help="Get order-mode swap quote (gasless + cross-chain)")
