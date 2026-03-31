@@ -1,7 +1,7 @@
 [project]
 name = "bitget-wallet-cli"
 version = "2026.3.31-1"
-description = "Bitget Wallet CLI — on-chain data at your fingertips"
+description = "Bitget Wallet CLI — on-chain data, token analysis, smart money, RWA stocks, swaps, and balance queries"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
