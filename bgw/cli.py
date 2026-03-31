@@ -323,15 +323,20 @@ def cmd_dev(args):
     if not data:
         print("No developer data available.")
         return
-    summary = data.get("summary") or data
-    rug_rate = summary.get("rugRate") or summary.get("rug_rate")
-    total = summary.get("totalProjects") or summary.get("total")
-    if rug_rate is not None:
-        print(f"\n🔍 Developer Analysis: {args.chain}:{args.contract}")
-        print(f"{'Rug Rate:':<20} {rug_rate}%")
+    print(f"\n🔍 Developer Analysis: {args.chain}:{args.contract}")
+    total = data.get("total_count") or data.get("totalProjects") or data.get("total")
+    migrated = data.get("migrated_count")
+    unmigrated = data.get("unmigrated_count")
+    rug_rate = data.get("rugRate") or data.get("rug_rate")
     if total is not None:
         print(f"{'Total Projects:':<20} {total}")
-    projects = data.get("list") or data.get("projects") or []
+    if migrated is not None:
+        print(f"{'Migrated:':<20} {migrated}")
+    if unmigrated is not None:
+        print(f"{'Unmigrated:':<20} {unmigrated}")
+    if rug_rate is not None:
+        print(f"{'Rug Rate:':<20} {rug_rate}%")
+    projects = data.get("tokens") or data.get("list") or data.get("projects") or []
     if projects:
         print(f"\n{'Symbol':<12} {'Chain':<10} {'Status':<12} {'MC':<14} {'Created'}")
         print("-" * 64)
