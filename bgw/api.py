@@ -1,53 +1,61 @@
-"""Bitget Wallet ToB API client with built-in signing."""
+"""Bitget Wallet API client with BKHmacAuth signing."""
+from __future__ import annotations
 
-import base64
 import hashlib
-import hmac
 import json
 import os
 import time
 
 import requests
 
-BASE_URL = "https://bopenapi.bgwapi.io"
-
-# Public demo credentials for testing. These may change over time —
-# if they stop working, please update to get the latest keys.
-# Public demo credentials for testing purposes. These may change over time —
-# if they stop working, please update to get the latest keys.
-# Override via BGW_API_KEY / BGW_API_SECRET env vars.
-API_KEY = os.environ.get("BGW_API_KEY", "4843D8C3F1E20772C0E634EDACC5C5F9A0E2DC92")
-API_SECRET = os.environ.get("BGW_API_SECRET", "F2ABFDC684BDC6775FD6286B8D06A3AAD30FD587")
-PARTNER_CODE = os.environ.get("BGW_PARTNER_CODE", "bgw_swap_public")
+BASE_URL = "https://copenapi.bgwapi.io"
+WALLET_ID = os.environ.get("BGW_WALLET_ID", "")
 
 
-def _sign(api_path: str, body_str: str, timestamp: str) -> str:
-    content = {
-        "apiPath": api_path,
-        "body": body_str,
-        "x-api-key": API_KEY,
-        "x-api-timestamp": timestamp,
-    }
-    payload = json.dumps(dict(sorted(content.items())), separators=(",", ":"))
-    sig = hmac.new(API_SECRET.encode(), payload.encode(), hashlib.sha256).digest()
-    return base64.b64encode(sig).decode()
+def _make_sign(method: str, path: str, body_str: str, ts: str) -> str:
+    """BKHmacAuth signature: SHA256(Method + Path + Body + Timestamp)."""
+    message = method + path + body_str + ts
+    digest = hashlib.sha256(message.encode("utf-8")).hexdigest()
+    return "0x" + digest
 
 
 def request(path: str, body: dict | None = None) -> dict:
-    timestamp = str(int(time.time() * 1000))
-    body_str = json.dumps(body, separators=(",", ":"), sort_keys=True) if body else ""
-    signature = _sign(path, body_str, timestamp)
-
+    """POST request with BKHmacAuth signing."""
+    ts = str(int(time.time() * 1000))
+    body_str = json.dumps(body, separators=(",", ":"), ensure_ascii=False) if body else ""
+    sign = _make_sign("POST", path, body_str, ts)
+    token_val = WALLET_ID if WALLET_ID else "toc_agent"
     headers = {
         "Content-Type": "application/json",
-        "x-api-key": API_KEY,
-        "x-api-timestamp": timestamp,
-        "x-api-signature": signature,
+        "channel": "toc_agent",
+        "brand": "toc_agent",
+        "clientversion": "10.0.0",
+        "language": "en",
+        "token": token_val,
+        "X-SIGN": sign,
+        "X-TIMESTAMP": ts,
     }
-    if "/swapx/" in path:
-        headers["Partner-Code"] = PARTNER_CODE
-
     resp = requests.post(BASE_URL + path, data=body_str or None, headers=headers, timeout=30)
     if resp.status_code != 200:
-        return {"error": f"HTTP {resp.status_code}", "message": resp.text[:500]}
+        return {"status": -1, "error_code": resp.status_code, "msg": resp.text[:500]}
+    return resp.json()
+
+
+def request_get(path_with_query: str) -> dict:
+    """GET request with BKHmacAuth signing."""
+    ts = str(int(time.time() * 1000))
+    sign = _make_sign("GET", path_with_query, "", ts)
+    token_val = WALLET_ID if WALLET_ID else "toc_agent"
+    headers = {
+        "channel": "toc_agent",
+        "brand": "toc_agent",
+        "clientversion": "10.0.0",
+        "language": "en",
+        "token": token_val,
+        "X-SIGN": sign,
+        "X-TIMESTAMP": ts,
+    }
+    resp = requests.get(BASE_URL + path_with_query, headers=headers, timeout=30)
+    if resp.status_code != 200:
+        return {"status": -1, "error_code": resp.status_code, "msg": resp.text[:500]}
     return resp.json()

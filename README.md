@@ -1,6 +1,6 @@
 # Bitget Wallet CLI
 
-On-chain data at your fingertips. Query token prices, security audits, swap quotes, and more from your terminal.
+On-chain data at your fingertips. Query token prices, market analysis, smart money tracking, RWA stocks, swap quotes, and more from your terminal.
 
 ## Prerequisites
 
@@ -31,56 +31,78 @@ bgw --version
 
 ```bash
 # Token price
-bgw price sol                          # SOL price
-bgw price eth                          # ETH price
-bgw price sol Es9vMF...               # SPL token by contract
+bgw price sol                          # SOL native token
+bgw price eth 0x6982...               # PEPE on Ethereum
 
-# Detailed token info
-bgw info sol
-bgw info eth 0xdAC17F...              # USDT on Ethereum
+# Detailed info + market data
+bgw info eth 0x6982...
+bgw market eth 0x6982...              # Price, MC, FDV, liquidity, narratives
 
-# Top gainers / losers
-bgw top gainers
-bgw top losers -n 20
+# Search tokens
+bgw search PEPE --chain eth
+bgw search-v2 PEPE                    # Broader DEX search
+
+# Rankings
+bgw top topGainers -n 10
+bgw top topLosers -n 10
 
 # Security audit
-bgw audit sol <contract>
+bgw audit eth 0x6982...
+
+# Developer rug check
+bgw dev sol <contract>
+
+# Launchpad scanning
+bgw launchpad --chain sol --mc-min 10000
 
 # K-line data
-bgw kline sol <contract> -p 1h -n 24
+bgw kline eth 0x6982... -p 1h -n 24
+bgw smart-kline eth 0x6982...         # With KOL/smart money overlays
 
-# Transaction stats
-bgw tx sol <contract>
+# Trading analysis
+bgw dynamics eth 0x6982...            # Buy/sell pressure
+bgw txlist eth 0x6982... --size 20    # Recent transactions
+bgw holders eth 0x6982...             # Top holders
 
-# Swap quote (same-chain)
-bgw swap --from-chain sol --to-contract EPjFWdd5... --amount 1
+# Profit analysis
+bgw profit eth 0x6982...
+bgw top-profit eth 0x6982...
 
-# Swap quote (cross-chain)
-bgw swap --from-chain sol --to-chain eth --from-contract "" --to-contract 0xdAC17F... --amount 1
+# Smart money
+bgw smart-money --period 7d -n 10
+bgw smart-money --group 1 --chain sol  # Smart money on Solana
 
-# Liquidity pools
-bgw lp sol <contract>
+# RWA stocks
+bgw rwa-list --chain bnb
+bgw rwa-info NVDAon
+bgw rwa-price NVDAon --chain bnb --side buy \
+  --coin-contract 0x55d398... --address 0xYour
+bgw rwa-kline NVDAon --period 1d
+bgw rwa-holdings 0xYourAddress
 
-# Order Mode — gasless + cross-chain swaps
-bgw order-quote --from-chain base --from-contract 0x833589f... --to-chain bnb \
-  --to-contract 0x55d398... --amount 10 --from-address 0xYourAddr
+# Swap quote
+bgw quote --from-address 0xYour --from-chain eth --from-symbol ETH \
+  --from-contract "" --from-amount 0.01 \
+  --to-symbol USDT --to-contract 0xdAC17F...
 
-bgw order-create --from-chain base --from-contract 0x833589f... --to-chain bnb \
-  --to-contract 0x55d398... --amount 10 --from-address 0xYourAddr \
-  --to-address 0xYourAddr --market bkbridgev3.liqbridge --feature no_gas
+# Cross-chain swap
+bgw quote --from-address 0xYour --from-chain eth --from-symbol ETH \
+  --from-contract "" --from-amount 0.1 \
+  --to-chain bnb --to-symbol USDT --to-contract 0x55d398... \
+  --tab-type bridge
 
-bgw order-status --order-id <orderId>
+# Token list & risk check
+bgw token-list sol
+bgw check-token eth 0x6982... --symbol PEPE
+
+# Balance
+bgw balance eth 0xd8dA6BF269...
+bgw balance sol 75k14Ug2UC67...
 
 # Raw JSON output (pipe-friendly)
-bgw price sol --json
-bgw top gainers --json | jq '.[0]'
+bgw --json price sol
+bgw --json top topGainers | jq '.[0]'
 ```
-
-## ✨ Order Mode — Gasless & Cross-Chain
-
-- **Gasless (EIP-7702)** — swap with zero native token balance; gas deducted from input token
-- **Cross-Chain** — swap tokens across chains in a single order, no manual bridging
-- Supported on EVM chains: Ethereum, Base, BNB Chain, Arbitrum, Polygon, Morph
 
 ## Supported Chains
 
@@ -88,52 +110,89 @@ bgw top gainers --json | jq '.[0]'
 
 Use empty contract (or omit) for native tokens (ETH, SOL, BNB, etc.).
 
-## Commands
+## Commands (36)
 
+### Market Data
 | Command | Description |
 |---------|-------------|
 | `bgw price` | Quick price lookup |
 | `bgw info` | Detailed token info (price, market cap, holders, links) |
-| `bgw top` | Top gainers or losers rankings |
-| `bgw audit` | Security audit (honeypot, permissions, blacklist) |
+| `bgw market` | Market info + narratives + pool list |
+| `bgw search` | v3 token search with ordering |
+| `bgw search-v2` | v2 broader search (DEX tokens) |
+| `bgw dev` | Developer history and rug rate |
+| `bgw top` | Rankings (topGainers, topLosers, Hotpicks) |
+| `bgw audit` | Security audit (honeypot, permissions, tax) |
 | `bgw kline` | K-line / candlestick data |
+| `bgw smart-kline` | K-line with smart money/KOL overlays |
 | `bgw tx` | Transaction volume and trader stats |
-| `bgw swap` | Swap quote with best route (same-chain & cross-chain) |
-| `bgw batch-tx` | Batch transaction stats for multiple tokens |
-| `bgw history` | Discover new tokens by timestamp |
-| `bgw send` | Broadcast signed transactions (MEV-protected) |
-| `bgw lp` | Liquidity pool information |
-| `bgw order-quote` | Order mode quote (gasless + cross-chain aware) |
-| `bgw order-create` | Create order with unsigned tx/signature data |
-| `bgw order-submit` | Submit signed transactions for an order |
-| `bgw order-status` | Query order lifecycle status |
+| `bgw batch-tx` | Batch transaction stats |
+| `bgw dynamics` | Trading dynamics across time windows |
+| `bgw txlist` | Transaction list with tag filtering |
+| `bgw holders` | Holder distribution and top holders |
+| `bgw profit` | Profit address analysis |
+| `bgw top-profit` | Top profitable addresses |
+| `bgw lp` | Liquidity pool info |
+| `bgw launchpad` | Launchpad scanning with filters |
+| `bgw history` | Historical tokens by creation time |
+| `bgw batch-price` | Batch price lookup |
 
-> ⚠️ **Swap amounts are human-readable** — use `--amount 0.1` for 0.1 USDT, NOT `100000000000000000`. Response amounts are also human-readable.
+### Smart Money
+| Command | Description |
+|---------|-------------|
+| `bgw smart-money` | KOL/smart money address ranking with filters |
+
+### RWA Stock Trading
+| Command | Description |
+|---------|-------------|
+| `bgw rwa-list` | Available RWA stocks |
+| `bgw rwa-config` | Trading config |
+| `bgw rwa-info` | Stock info and market status |
+| `bgw rwa-price` | Pre-trade buy/sell price |
+| `bgw rwa-kline` | Stock K-line charts |
+| `bgw rwa-holdings` | User's RWA portfolio |
+
+### Swap
+| Command | Description |
+|---------|-------------|
+| `bgw quote` | Multi-market swap quotes |
+| `bgw confirm` | Confirm with chosen market |
+| `bgw make-order` | Create order (unsigned txs) |
+| `bgw send-order` | Submit signed transactions |
+| `bgw order-details` | Track order status |
+| `bgw check-token` | Pre-trade risk check |
+| `bgw token-list` | Popular tokens per chain |
+
+### Balance
+| Command | Description |
+|---------|-------------|
+| `bgw balance` | Wallet token balances with USD values |
+
+> ⚠️ **Swap amounts are human-readable** — use `--from-amount 0.1` for 0.1 USDT, NOT wei/lamports.
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BGW_API_KEY` | Built-in demo key | Bitget Wallet ToB API appId |
-| `BGW_API_SECRET` | Built-in demo secret | Bitget Wallet ToB API apiSecret |
-| `BGW_PARTNER_CODE` | `bgw_swap_public` | Partner code for swap endpoints |
+| `BGW_WALLET_ID` | _(empty)_ | Wallet ID for Social Login Wallet users (optional) |
 
-> **Note:** The built-in demo keys are for testing purposes and may change over time. If they stop working, please update the CLI to get the latest keys.
+No API key required — uses SHA256 hash signing (BKHmacAuth).
 
 ## Security
 
-- Only communicates with `https://bopenapi.bgwapi.io` — no other external endpoints
+- Only communicates with `https://copenapi.bgwapi.io` — no other external endpoints
+- No API keys or secrets — SHA256 hash signing with zero credentials
 - No `eval()` / `exec()` or dynamic code execution
 - No file system access outside the project directory
-- Built-in API keys are public demo credentials (safe to commit)
 - No data collection, telemetry, or analytics
 - No access to sensitive files (SSH keys, credentials, wallet files, etc.)
-- Dependencies: `requests` only (stdlib: `hmac`, `hashlib`, `json`, `base64`)
+- Dependencies: `requests` only
+- SlowMist security review: 🟢 LOW risk
 - We recommend auditing the source yourself before installation
 
 ## Related Projects
 
-- [bitget-wallet-skill](https://github.com/bitget-wallet-ai-lab/bitget-wallet-skill) — OpenClaw AI Agent skill (with [platform compatibility guide](https://github.com/bitget-wallet-ai-lab/bitget-wallet-skill/blob/main/COMPATIBILITY.md))
+- [bitget-wallet-skill](https://github.com/bitget-wallet-ai-lab/bitget-wallet-skill) — OpenClaw AI Agent skill
 - [bitget-wallet-mcp](https://github.com/bitget-wallet-ai-lab/bitget-wallet-mcp) — MCP Server for Claude/Cursor/Windsurf
 
 ## License
