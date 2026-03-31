@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 
 from . import __version__
 from .api import request
@@ -604,6 +605,7 @@ def cmd_quote(args):
         "publicKey": "",
         "slippage": str(args.slippage) if args.slippage else "",
         "toAddress": args.to_address or args.from_address,
+        "requestId": str(int(time.time() * 1000)),
     }
     result = request("/swap-go/swapx/quote", body)
     if args.json:
@@ -638,6 +640,7 @@ def cmd_quote(args):
 
 def cmd_confirm(args):
     """Confirm swap with chosen market (second quote)."""
+    slippage = str(args.slippage) if args.slippage else "1"
     body = {
         "fromChain": args.from_chain,
         "fromSymbol": args.from_symbol,
@@ -649,12 +652,19 @@ def cmd_confirm(args):
         "toContract": args.to_contract or "",
         "toAddress": args.to_address or args.from_address,
         "market": args.market,
-        "tab_type": args.tab_type,
-        "publicKey": "",
-        "slippage": str(args.slippage) if args.slippage else "1",
+        "slippage": slippage,
         "gasLevel": args.gas_level,
         "features": [args.feature] if args.feature else ["user_gas"],
         "protocol": args.protocol,
+        "recommendSlippage": slippage,
+        "lastOutAmount": "",
+        "mevProtection": {
+            "chain": args.from_chain,
+            "mevFee": "0",
+            "amountMin": args.from_amount,
+            "mevTarget": True,
+            "mode": "smart",
+        },
     }
     result = request("/swap-go/swapx/confirm", body)
     if args.json:
@@ -687,8 +697,6 @@ def cmd_make_order(args):
         "toSymbol": args.to_symbol,
         "toAddress": args.to_address or args.from_address,
         "fromAmount": args.from_amount,
-        "tab_type": args.tab_type,
-        "publicKey": "",
         "slippage": str(args.slippage) if args.slippage else "1",
         "market": args.market,
         "protocol": args.protocol,
@@ -768,7 +776,7 @@ def cmd_check_token(args):
 
 def cmd_token_list(args):
     """Get popular swap token list."""
-    body = {"chain": args.chain}
+    body = {"chain": args.chain, "isAllNetWork": 1}
     result = request("/swap-go/swapx/getTokenList", body)
     if args.json:
         print(json.dumps(result, indent=2))
@@ -1024,7 +1032,6 @@ def main():
     p.add_argument("--slippage", type=float, help="Slippage tolerance %")
     p.add_argument("--gas-level", default="average", help="Gas level (average/fast)")
     p.add_argument("--feature", default="", help="Feature: user_gas or no_gas")
-    p.add_argument("--tab-type", default="swap", help="swap or bridge (default: swap)")
     p.set_defaults(func=cmd_confirm)
 
     # make-order
@@ -1042,7 +1049,6 @@ def main():
     p.add_argument("--market", required=True, help="Market from confirm result")
     p.add_argument("--protocol", required=True, help="Protocol from confirm result")
     p.add_argument("--slippage", type=float, help="Slippage tolerance %")
-    p.add_argument("--tab-type", default="swap", help="swap or bridge (default: swap)")
     p.set_defaults(func=cmd_make_order)
 
     # send-order
