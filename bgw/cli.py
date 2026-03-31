@@ -431,15 +431,6 @@ def cmd_dynamics(args):
         print("No trading dynamics data.")
         return
     print(f"\n📈 Trading Dynamics: {args.chain}:{args.contract}")
-    for period in ["5m", "1h", "4h", "24h"]:
-        p = data.get(period, {})
-        if p:
-            print(f"\n  {period}:")
-            print(f"    Buy Volume:    {fmt_volume(p.get('buyVolume') or p.get('buy_volume'))}")
-            print(f"    Sell Volume:   {fmt_volume(p.get('sellVolume') or p.get('sell_volume'))}")
-            print(f"    Buyers:        {fmt_number(p.get('buyers'))}")
-            print(f"    Sellers:       {fmt_number(p.get('sellers'))}")
-            print(f"    Price Change:  {fmt_change(p.get('priceChange') or p.get('price_change'))}")
     if isinstance(data, list):
         for item in data:
             period = item.get("period", "?")
@@ -448,6 +439,16 @@ def cmd_dynamics(args):
             print(f"    Sell Volume:   {fmt_volume(item.get('sellVolume'))}")
             print(f"    Buyers:        {fmt_number(item.get('buyers'))}")
             print(f"    Sellers:       {fmt_number(item.get('sellers'))}")
+    elif isinstance(data, dict):
+        for period in ["5m", "1h", "4h", "24h"]:
+            p = data.get(period, {})
+            if p:
+                print(f"\n  {period}:")
+                print(f"    Buy Volume:    {fmt_volume(p.get('buyVolume') or p.get('buy_volume'))}")
+                print(f"    Sell Volume:   {fmt_volume(p.get('sellVolume') or p.get('sell_volume'))}")
+                print(f"    Buyers:        {fmt_number(p.get('buyers'))}")
+                print(f"    Sellers:       {fmt_number(p.get('sellers'))}")
+                print(f"    Price Change:  {fmt_change(p.get('priceChange') or p.get('price_change'))}")
 
 
 def cmd_txlist(args):
@@ -594,7 +595,7 @@ def cmd_quote(args):
         "toChain": args.to_chain or args.from_chain,
         "toSymbol": args.to_symbol,
         "toContract": args.to_contract or "",
-        "tab_type": "swap",
+        "tab_type": args.tab_type,
         "publicKey": "",
         "slippage": str(args.slippage) if args.slippage else "",
         "toAddress": args.to_address or args.from_address,
@@ -643,6 +644,8 @@ def cmd_confirm(args):
         "toContract": args.to_contract or "",
         "toAddress": args.to_address or args.from_address,
         "market": args.market,
+        "tab_type": args.tab_type,
+        "publicKey": "",
         "slippage": str(args.slippage) if args.slippage else "1",
         "gasLevel": args.gas_level,
         "features": [args.feature] if args.feature else ["user_gas"],
@@ -679,6 +682,8 @@ def cmd_make_order(args):
         "toSymbol": args.to_symbol,
         "toAddress": args.to_address or args.from_address,
         "fromAmount": args.from_amount,
+        "tab_type": args.tab_type,
+        "publicKey": "",
         "slippage": str(args.slippage) if args.slippage else "1",
         "market": args.market,
         "protocol": args.protocol,
@@ -818,12 +823,13 @@ def cmd_balance(args):
         price = t.get("price", "")
         usd_val = ""
         try:
-            if balance and price and float(balance) > 0:
-                usd_val = f"${float(balance) * float(price):,.2f}"
+            bal_f = float(balance or 0)
+            if bal_f > 0 and price:
+                usd_val = f"${bal_f * float(price):,.2f}"
+            if bal_f == 0:
+                continue  # skip zero balances
         except (ValueError, TypeError):
-            pass
-        if float(balance or 0) == 0:
-            continue  # skip zero balances
+            continue
         print(f"{symbol:<12} {str(balance):<20} {usd_val:<16}")
 
 
@@ -994,6 +1000,7 @@ def main():
     p.add_argument("--to-contract", default="", help="Dest token contract (omit for native)")
     p.add_argument("--to-address", default="", help="Recipient address (default: from-address)")
     p.add_argument("--slippage", type=float, help="Slippage tolerance %")
+    p.add_argument("--tab-type", default="swap", help="swap or bridge (default: swap)")
     p.set_defaults(func=cmd_quote)
 
     # confirm
@@ -1012,6 +1019,7 @@ def main():
     p.add_argument("--slippage", type=float, help="Slippage tolerance %")
     p.add_argument("--gas-level", default="average", help="Gas level (average/fast)")
     p.add_argument("--feature", default="", help="Feature: user_gas or no_gas")
+    p.add_argument("--tab-type", default="swap", help="swap or bridge (default: swap)")
     p.set_defaults(func=cmd_confirm)
 
     # make-order
@@ -1029,6 +1037,7 @@ def main():
     p.add_argument("--market", required=True, help="Market from confirm result")
     p.add_argument("--protocol", required=True, help="Protocol from confirm result")
     p.add_argument("--slippage", type=float, help="Slippage tolerance %")
+    p.add_argument("--tab-type", default="swap", help="swap or bridge (default: swap)")
     p.set_defaults(func=cmd_make_order)
 
     # send-order
