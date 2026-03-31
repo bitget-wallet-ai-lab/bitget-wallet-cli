@@ -1,4 +1,5 @@
 """Bitget Wallet CLI — on-chain data at your fingertips."""
+from __future__ import annotations
 
 import argparse
 import json
@@ -17,7 +18,7 @@ CHAINS = {
 
 
 def _get_token(chain: str, contract: str) -> dict | None:
-    result = request("/bgw-pro/market/v3/coin/batchGetBaseInfo",
+    result = request("/market/v3/coin/batchGetBaseInfo",
                      {"list": [{"chain": chain, "contract": contract}]})
     if "data" in result and "list" in result["data"] and result["data"]["list"]:
         return result["data"]["list"][0]
@@ -70,7 +71,7 @@ def cmd_info(args):
 def cmd_top(args):
     """Get top gainers or losers."""
     name = "topGainers" if args.type == "gainers" else "topLosers"
-    result = request("/bgw-pro/market/v3/topRank/detail", {"name": name})
+    result = request("/market/v3/topRank/detail", {"name": name})
     items = result.get("data", {}).get("list", [])
     if args.json:
         print(json.dumps(items[:args.limit], indent=2))
@@ -86,7 +87,7 @@ def cmd_top(args):
 
 def cmd_audit(args):
     """Security audit for a token."""
-    result = request("/bgw-pro/market/v3/coin/security/audits",
+    result = request("/market/v3/coin/security/audits",
                      {"list": [{"chain": args.chain, "contract": args.contract}], "source": "bg"})
     if args.json:
         print(json.dumps(result, indent=2))
@@ -97,7 +98,6 @@ def cmd_audit(args):
         print("No audit data available.")
         return
     audit = audits[0]
-    # Determine risk level: try structured field first, then derive from counts
     risk = audit.get("risk_level", "")
     if not risk:
         if audit.get("highRisk"):
@@ -113,12 +113,10 @@ def cmd_audit(args):
     print(f"\n{emoji} Security Audit: {symbol} ({risk.upper()} risk)")
     print(f"{'Chain:':<20} {args.chain}")
     print(f"{'Contract:':<20} {args.contract}")
-    # Show tax info if available
     buy_tax = audit.get("buyTax", 0)
     sell_tax = audit.get("sellTax", 0)
     print(f"{'Buy Tax:':<20} {buy_tax}%")
     print(f"{'Sell Tax:':<20} {sell_tax}%")
-    # Show key security flags
     flags = [
         ("Freeze Authority", audit.get("freezeAuth")),
         ("Mint Authority", audit.get("mintAuth")),
@@ -130,13 +128,11 @@ def cmd_audit(args):
         print(f"\n{'Flag':<25} {'Status':<10}")
         print("-" * 37)
         for name, val in flag_items:
-            # For freeze/mint auth: True = risky; for LP lock: True = good
             if name == "LP Locked":
                 icon = "✅" if val else "⚠️"
             else:
                 icon = "⚠️" if val else "✅"
             print(f"{icon} {name:<23} {val}")
-    # Show risk/warn checks if present (structured audit format)
     for check_key, label in [("riskChecks", "🔴 Risk"), ("warnChecks", "⚠️ Warn"), ("lowChecks", "ℹ️ Info")]:
         checks = audit.get(check_key)
         if checks:
@@ -144,7 +140,6 @@ def cmd_audit(args):
             for item in checks:
                 name = item.get("name") or item.get("labelName") or item.get("audit_name", "?")
                 print(f"  - {name}")
-    # Legacy audit_items format
     items = audit.get("audit_items") or audit.get("auditItems") or []
     if items:
         print(f"\n{'Check':<30} {'Result':<10}")
@@ -158,7 +153,7 @@ def cmd_audit(args):
 
 def cmd_kline(args):
     """Get K-line data."""
-    result = request("/bgw-pro/market/v3/coin/getKline",
+    result = request("/market/v3/coin/getKline",
                      {"chain": args.chain, "contract": args.contract,
                       "period": args.period, "size": args.size})
     if args.json:
@@ -181,7 +176,7 @@ def cmd_kline(args):
 
 def cmd_tx(args):
     """Get transaction stats."""
-    result = request("/bgw-pro/market/v3/coin/getTxInfo",
+    result = request("/market/v3/coin/getTxInfo",
                      {"chain": args.chain, "contract": args.contract})
     if args.json:
         print(json.dumps(result, indent=2))
@@ -204,13 +199,13 @@ def cmd_batch_tx(args):
     for item in args.tokens:
         chain, contract = item.split(":", 1)
         tokens.append({"chain": chain, "contract": contract})
-    result = request("/bgw-pro/market/v3/coin/batchGetTxInfo", {"list": tokens})
+    result = request("/market/v3/coin/batchGetTxInfo", {"list": tokens})
     print(json.dumps(result, indent=2))
 
 
 def cmd_history(args):
     """Get historical token list by timestamp."""
-    result = request("/bgw-pro/market/v3/historical-coins",
+    result = request("/market/v3/historical-coins",
                      {"createTime": args.create_time, "limit": args.limit})
     if args.json:
         print(json.dumps(result, indent=2))
@@ -232,7 +227,7 @@ def cmd_batch_price(args):
     for item in args.tokens:
         chain, contract = item.split(":", 1)
         tokens.append({"chain": chain, "contract": contract})
-    result = request("/bgw-pro/market/v3/coin/batchGetBaseInfo", {"list": tokens})
+    result = request("/market/v3/coin/batchGetBaseInfo", {"list": tokens})
     if args.json:
         print(json.dumps(result, indent=2))
         return
@@ -247,81 +242,9 @@ def cmd_batch_price(args):
               f"{fmt_change(t.get('change_24h')):<14} {t.get('chain', '?')}")
 
 
-def cmd_swap(args):
-    """Get swap quote."""
-    body = {
-        "fromChain": args.from_chain,
-        "fromContract": args.from_contract or "",
-        "toChain": args.to_chain or args.from_chain,
-        "toContract": args.to_contract,
-        "fromAmount": args.amount,
-        "estimateGas": True,
-    }
-    if args.from_address:
-        body["fromAddress"] = args.from_address
-    if args.from_symbol:
-        body["fromSymbol"] = args.from_symbol
-    if args.to_symbol:
-        body["toSymbol"] = args.to_symbol
-    result = request("/bgw-pro/swapx/pro/quote", body)
-    if args.json:
-        print(json.dumps(result, indent=2))
-        return
-    data = result.get("data", {})
-    if not data:
-        print("No quote available.", file=sys.stderr)
-        sys.exit(1)
-    print(f"\n💱 Swap Quote")
-    print(f"{'From:':<16} {args.amount} ({args.from_chain})")
-    print(f"{'To:':<16} {data.get('toAmount', '?')} ({args.to_chain or args.from_chain})")
-    print(f"{'Market:':<16} {data.get('market', '?')}")
-    print(f"{'Slippage:':<16} {data.get('slippage', '?')}%")
-    print(f"{'Gas Limit:':<16} {data.get('gasLimit', '?')}")
-
-
-def cmd_calldata(args):
-    """Generate unsigned swap transaction data."""
-    body = {
-        "fromChain": args.from_chain,
-        "fromContract": args.from_contract or "",
-        "toChain": args.to_chain or args.from_chain,
-        "toContract": args.to_contract,
-        "fromAmount": args.amount,
-        "fromAddress": args.from_address,
-        "toAddress": args.to_address,
-        "market": args.market,
-    }
-    if args.slippage:
-        body["slippage"] = args.slippage
-    if args.deadline:
-        body["deadline"] = args.deadline
-    if args.from_symbol:
-        body["fromSymbol"] = args.from_symbol
-    if args.to_symbol:
-        body["toSymbol"] = args.to_symbol
-    result = request("/bgw-pro/swapx/pro/swap", body)
-    if args.json:
-        print(json.dumps(result, indent=2))
-        return
-    data = result.get("data", {})
-    if not data:
-        print("No calldata available.", file=sys.stderr)
-        sys.exit(1)
-    print(f"\n🔧 Swap Calldata")
-    print(f"{'From:':<16} {args.amount} ({args.from_chain})")
-    print(f"{'To Chain:':<16} {args.to_chain or args.from_chain}")
-    print(f"{'Market:':<16} {args.market}")
-    if args.deadline:
-        print(f"{'Deadline:':<16} {args.deadline}s")
-    txs = data.get("txs") or data.get("transactions") or []
-    print(f"{'Transactions:':<16} {len(txs)}")
-    for i, tx in enumerate(txs):
-        print(f"  [{i}] to={tx.get('to', '?')[:20]}... value={tx.get('value', '0')}")
-
-
 def cmd_liquidity(args):
     """Get liquidity pools."""
-    result = request("/bgw-pro/market/v3/poolList",
+    result = request("/market/v3/poolList",
                      {"chain": args.chain, "contract": args.contract})
     if args.json:
         print(json.dumps(result, indent=2))
@@ -339,110 +262,6 @@ def cmd_liquidity(args):
         print(f"{name:<30} {liq:<16} {vol:<16}")
 
 
-def cmd_order_quote(args):
-    """Get order-mode swap quote (supports cross-chain + gasless)."""
-    body = {
-        "fromChain": args.from_chain,
-        "fromContract": args.from_contract or "",
-        "fromAmount": args.amount,
-        "toChain": args.to_chain or args.from_chain,
-        "toContract": args.to_contract,
-        "fromAddress": args.from_address,
-    }
-    if args.to_address:
-        body["toAddress"] = args.to_address
-    if args.fee_rate:
-        body["feeRate"] = args.fee_rate
-    result = request("/bgw-pro/swapx/order/getSwapPrice", body)
-    if args.json:
-        print(json.dumps(result, indent=2))
-        return
-    data = result.get("data", {})
-    if not data:
-        print(f"Quote failed: {result.get('title', 'unknown error')}", file=sys.stderr)
-        sys.exit(1)
-    print(f"\n💱 Order Quote")
-    print(f"{'To Amount:':<16} {data.get('toAmount', '?')}")
-    print(f"{'Market:':<16} {data.get('market', '?')}")
-    print(f"{'Features:':<16} {data.get('features', [])}")
-    print(f"{'EIP-7702:':<16} {'Bound' if data.get('eip7702Bindend') else 'Not bound'}")
-    fee = data.get("fee", {})
-    if fee:
-        print(f"{'Fees:':<16} ${fee.get('totalAmountInUsd', '?')}")
-
-
-def cmd_order_create(args):
-    """Create order and receive transaction data for signing."""
-    body = {
-        "fromChain": args.from_chain,
-        "fromContract": args.from_contract or "",
-        "fromAmount": args.amount,
-        "toChain": args.to_chain or args.from_chain,
-        "toContract": args.to_contract,
-        "fromAddress": args.from_address,
-        "toAddress": args.to_address or args.from_address,
-        "market": args.market,
-    }
-    if args.slippage:
-        body["slippage"] = str(args.slippage)
-    if args.fee_rate:
-        body["feeRate"] = args.fee_rate
-    if args.feature:
-        body["feature"] = args.feature
-    result = request("/bgw-pro/swapx/order/makeSwapOrder", body)
-    if args.json:
-        print(json.dumps(result, indent=2))
-        return
-    data = result.get("data", {})
-    if not data:
-        print(f"Create failed: {result.get('title', 'unknown error')}", file=sys.stderr)
-        sys.exit(1)
-    sigs = data.get("signatures", [])
-    txs = data.get("txs", [])
-    print(f"\n📝 Order Created")
-    print(f"{'Order ID:':<16} {data.get('orderId', '?')}")
-    print(f"{'Signatures:':<16} {len(sigs)}")
-    print(f"{'Transactions:':<16} {len(txs)}")
-    print(f"{'Mode:':<16} {'Gasless' if sigs else 'Normal'}")
-
-
-def cmd_order_submit(args):
-    """Submit signed transactions for an order."""
-    result = request("/bgw-pro/swapx/order/submitSwapOrder", {
-        "orderId": args.order_id,
-        "signedTxs": args.signed_txs,
-    })
-    if args.json:
-        print(json.dumps(result, indent=2))
-        return
-    if result.get("status") == 0:
-        print(f"✅ Order {args.order_id} submitted successfully")
-    else:
-        print(f"❌ Submit failed: {result.get('title', 'unknown error')}", file=sys.stderr)
-
-
-def cmd_order_status(args):
-    """Query order status."""
-    result = request("/bgw-pro/swapx/order/getSwapOrder", {"orderId": args.order_id})
-    if args.json:
-        print(json.dumps(result, indent=2))
-        return
-    data = result.get("data", {})
-    if not data:
-        print(f"Status query failed: {result.get('title', 'unknown error')}", file=sys.stderr)
-        sys.exit(1)
-    status = data.get("status", "?")
-    icon = {"success": "✅", "failed": "❌", "processing": "⏳", "init": "📝"}.get(status, "❓")
-    print(f"\n{icon} Order Status: {status}")
-    print(f"{'Order ID:':<16} {data.get('orderId', '?')}")
-    print(f"{'From:':<16} {data.get('fromAmount', '?')} ({data.get('fromChain', '?')})")
-    print(f"{'To:':<16} {data.get('toAmount', '?')} ({data.get('toChain', '?')})")
-    if data.get("receiveAmount") and str(data["receiveAmount"]) != "0":
-        print(f"{'Received:':<16} {data['receiveAmount']}")
-    for tx in data.get("txs", []):
-        print(f"  TX [{tx.get('stage', '?')}]: {tx.get('chain', '?')} {tx.get('txId', '?')}")
-
-
 def cmd_search(args):
     """Search for tokens by keyword."""
     body = {"keyword": args.keyword, "limit": args.limit}
@@ -450,7 +269,7 @@ def cmd_search(args):
         body["chain"] = args.chain
     if args.order_by:
         body["orderBy"] = args.order_by
-    result = request("/bgw-pro/market/v3/coin/search", body)
+    result = request("/market/v3/coin/search", body)
     if args.json:
         print(json.dumps(result, indent=2))
         return
@@ -471,7 +290,7 @@ def cmd_search(args):
 
 def cmd_market(args):
     """Get market info for a token."""
-    result = request("/bgw-pro/market/v3/coin/getMarketInfo",
+    result = request("/market/v3/coin/getMarketInfo",
                      {"chain": args.chain, "contract": args.contract})
     if args.json:
         print(json.dumps(result, indent=2))
@@ -498,7 +317,7 @@ def cmd_dev(args):
     body = {"chain": args.chain, "contract": args.contract, "limit": args.limit}
     if args.migrated is not None:
         body["migrated"] = args.migrated
-    result = request("/bgw-pro/market/v3/coin/dev", body)
+    result = request("/market/v3/coin/dev", body)
     if args.json:
         print(json.dumps(result, indent=2))
         return
@@ -506,7 +325,6 @@ def cmd_dev(args):
     if not data:
         print("No developer data available.")
         return
-    # Summary
     summary = data.get("summary") or data
     rug_rate = summary.get("rugRate") or summary.get("rug_rate")
     total = summary.get("totalProjects") or summary.get("total")
@@ -515,7 +333,6 @@ def cmd_dev(args):
         print(f"{'Rug Rate:':<20} {rug_rate}%")
     if total is not None:
         print(f"{'Total Projects:':<20} {total}")
-    # Project list
     projects = data.get("list") or data.get("projects") or []
     if projects:
         print(f"\n{'Symbol':<12} {'Chain':<10} {'Status':<12} {'MC':<14} {'Created'}")
@@ -550,7 +367,7 @@ def cmd_launchpad(args):
         body["lpMax"] = args.lp_max
     if args.keywords:
         body["keywords"] = args.keywords
-    result = request("/bgw-pro/market/v3/launchpad/tokens", body)
+    result = request("/market/v3/launchpad/tokens", body)
     if args.json:
         print(json.dumps(result, indent=2))
         return
@@ -578,7 +395,7 @@ def cmd_smart_kline(args):
     body = {"chain": args.chain, "contract": args.contract, "period": args.period}
     if args.size:
         body["size"] = args.size
-    result = request("/bgw-pro/market/v2/coin/SimpleKline", body)
+    result = request("/market/v2/coin/SimpleKline", body)
     if args.json:
         print(json.dumps(result, indent=2))
         return
@@ -606,7 +423,7 @@ def cmd_smart_kline(args):
 
 def cmd_dynamics(args):
     """Get trading dynamics across time windows."""
-    result = request("/bgw-pro/market/v2/coin/GetTradingDynamics",
+    result = request("/market/v2/coin/GetTradingDynamics",
                      {"chain": args.chain, "contract": args.contract})
     if args.json:
         print(json.dumps(result, indent=2))
@@ -625,7 +442,6 @@ def cmd_dynamics(args):
             print(f"    Buyers:        {fmt_number(p.get('buyers'))}")
             print(f"    Sellers:       {fmt_number(p.get('sellers'))}")
             print(f"    Price Change:  {fmt_change(p.get('priceChange') or p.get('price_change'))}")
-    # Fallback: if data is a list of windows
     if isinstance(data, list):
         for item in data:
             period = item.get("period", "?")
@@ -650,7 +466,7 @@ def cmd_txlist(args):
         body["period"] = args.period
     if args.tags:
         body["tags"] = args.tags
-    result = request("/bgw-pro/market/v2/coin/TransactionList", body)
+    result = request("/market/v2/coin/TransactionList", body)
     if args.json:
         print(json.dumps(result, indent=2))
         return
@@ -679,7 +495,7 @@ def cmd_holders(args):
     body = {"chain": args.chain, "contract": args.contract, "sort": args.sort}
     if args.special:
         body["special"] = args.special
-    result = request("/bgw-pro/market/v2/GetHoldersInfo", body)
+    result = request("/market/v2/GetHoldersInfo", body)
     if args.json:
         print(json.dumps(result, indent=2))
         return
@@ -707,7 +523,7 @@ def cmd_holders(args):
 
 def cmd_profit(args):
     """Get profit address analysis."""
-    result = request("/bgw-pro/market/v2/coin/GetProfitAddressAnalysis",
+    result = request("/market/v2/coin/GetProfitAddressAnalysis",
                      {"chain": args.chain, "contract": args.contract})
     if args.json:
         print(json.dumps(result, indent=2))
@@ -728,7 +544,6 @@ def cmd_profit(args):
     ]:
         val = data.get(key)
         if val is None:
-            # Try snake_case variant
             snake = "".join(f"_{c.lower()}" if c.isupper() else c for c in key)
             val = data.get(snake)
         if val is not None:
@@ -742,7 +557,7 @@ def cmd_profit(args):
 
 def cmd_top_profit(args):
     """Get top profitable addresses for a token."""
-    result = request("/bgw-pro/market/v2/coin/GetTopProfit",
+    result = request("/market/v2/coin/GetTopProfit",
                      {"chain": args.chain, "contract": args.contract})
     if args.json:
         print(json.dumps(result, indent=2))
@@ -765,38 +580,204 @@ def cmd_top_profit(args):
         print(f"{i:<4} {addr:<44} {profit:<16} {roi}")
 
 
-def cmd_send(args):
-    """Broadcast signed transactions via MEV-protected endpoint."""
-    txs = []
-    for tx_str in args.txs:
-        parts = tx_str.split(":", 3)
-        if len(parts) < 4:
-            print(f"Error: each tx must be id:chain:from:rawTx, got: {tx_str}", file=sys.stderr)
-            sys.exit(1)
-        tx = {
-            "id": parts[0],
-            "chain": parts[1],
-            "from": parts[2],
-            "rawTx": parts[3],
-        }
-        txs.append(tx)
-    result = request("/bgw-pro/swapx/pro/send", {"chain": args.chain, "txs": txs})
+# ── Swap Flow Commands ────────────────────────────────────────────────────
+
+def cmd_quote(args):
+    """Get swap quote (first step — returns multiple markets)."""
+    body = {
+        "fromChain": args.from_chain,
+        "fromContract": args.from_contract or "",
+        "toChain": args.to_chain or args.from_chain,
+        "toContract": args.to_contract,
+        "fromAmount": args.amount,
+    }
+    if args.from_address:
+        body["fromAddress"] = args.from_address
+    result = request("/swap-go/swapx/quote", body)
     if args.json:
         print(json.dumps(result, indent=2))
         return
     data = result.get("data", {})
-    results = data.get("result", []) if isinstance(data, dict) else data if isinstance(data, list) else []
-    if not results:
-        print("No results returned.")
+    if not data:
+        print(f"No quote available: {result.get('msg', 'unknown error')}", file=sys.stderr)
+        sys.exit(1)
+    print(f"\n💱 Swap Quote")
+    markets = data.get("markets") or data.get("list") or []
+    if isinstance(data, dict) and not markets:
+        # Single market response
+        print(f"{'From:':<16} {args.amount} ({args.from_chain})")
+        print(f"{'To:':<16} {data.get('toAmount', '?')} ({args.to_chain or args.from_chain})")
+        print(f"{'Market:':<16} {data.get('market', '?')}")
+    else:
+        print(f"{'From:':<16} {args.amount} ({args.from_chain})")
+        print(f"{'To Chain:':<16} {args.to_chain or args.from_chain}")
+        print(f"\n{'#':<4} {'Market':<20} {'To Amount':<20} {'Slippage'}")
+        print("-" * 56)
+        for i, m in enumerate(markets, 1):
+            market = m.get("market", "?")
+            to_amt = m.get("toAmount", "?")
+            slip = m.get("slippage", "?")
+            print(f"{i:<4} {market:<20} {to_amt:<20} {slip}")
+
+
+def cmd_confirm(args):
+    """Confirm swap with chosen market (second quote)."""
+    body = {
+        "fromChain": args.from_chain,
+        "fromContract": args.from_contract or "",
+        "toChain": args.to_chain or args.from_chain,
+        "toContract": args.to_contract,
+        "fromAmount": args.amount,
+        "fromAddress": args.from_address,
+        "market": args.market,
+    }
+    if args.slippage:
+        body["slippage"] = str(args.slippage)
+    result = request("/swap-go/swapx/confirm", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
         return
-    print(f"\n{'ID':<36} {'Status':<8} {'TX Hash'}")
-    print("-" * 100)
-    for r in results:
-        oid = r.get("id", "?")[:34]
-        code = r.get("code", "?")
-        icon = "✅" if str(code) == "0" else "❌"
-        tx_hash = r.get("txHash", r.get("message", "?"))
-        print(f"{icon} {oid:<34} {code:<6} {tx_hash}")
+    data = result.get("data", {})
+    if not data:
+        print(f"Confirm failed: {result.get('msg', 'unknown error')}", file=sys.stderr)
+        sys.exit(1)
+    print(f"\n✅ Swap Confirmed")
+    print(f"{'From:':<16} {args.amount} ({args.from_chain})")
+    print(f"{'To Amount:':<16} {data.get('toAmount', '?')}")
+    print(f"{'Market:':<16} {args.market}")
+    print(f"{'Gas Limit:':<16} {data.get('gasLimit', '?')}")
+
+
+def cmd_make_order(args):
+    """Create swap order (returns unsigned tx data)."""
+    body = {
+        "fromChain": args.from_chain,
+        "fromContract": args.from_contract or "",
+        "toChain": args.to_chain or args.from_chain,
+        "toContract": args.to_contract,
+        "fromAmount": args.amount,
+        "fromAddress": args.from_address,
+        "toAddress": args.to_address or args.from_address,
+        "market": args.market,
+    }
+    if args.slippage:
+        body["slippage"] = str(args.slippage)
+    result = request("/swap-go/swapx/makeOrder", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print(f"Make order failed: {result.get('msg', 'unknown error')}", file=sys.stderr)
+        sys.exit(1)
+    print(f"\n📝 Order Created")
+    print(f"{'Order ID:':<16} {data.get('orderId', '?')}")
+    txs = data.get("txs", [])
+    print(f"{'Transactions:':<16} {len(txs)}")
+    for i, tx in enumerate(txs):
+        print(f"  [{i}] to={tx.get('to', '?')[:20]}... value={tx.get('value', '0')}")
+
+
+def cmd_send_order(args):
+    """Submit signed order transactions."""
+    body = {
+        "orderId": args.order_id,
+        "signedTxs": args.signed_txs,
+    }
+    result = request("/swap-go/swapx/send", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    if result.get("status") == 0:
+        print(f"✅ Order {args.order_id} submitted successfully")
+    else:
+        print(f"❌ Submit failed: {result.get('msg', 'unknown error')}", file=sys.stderr)
+
+
+def cmd_order_details(args):
+    """Query order status."""
+    result = request("/swap-go/swapx/getOrderDetails", {"orderId": args.order_id})
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print(f"Query failed: {result.get('msg', 'unknown error')}", file=sys.stderr)
+        sys.exit(1)
+    status = data.get("status", "?")
+    icon = {"success": "✅", "failed": "❌", "processing": "⏳", "init": "📝"}.get(status, "❓")
+    print(f"\n{icon} Order Status: {status}")
+    print(f"{'Order ID:':<16} {data.get('orderId', '?')}")
+    print(f"{'From:':<16} {data.get('fromAmount', '?')} ({data.get('fromChain', '?')})")
+    print(f"{'To:':<16} {data.get('toAmount', '?')} ({data.get('toChain', '?')})")
+
+
+def cmd_check_token(args):
+    """Pre-trade token risk check."""
+    body = {"chain": args.chain, "contract": args.contract}
+    result = request("/swap-go/swapx/checkSwapToken", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print(f"Check failed: {result.get('msg', 'unknown error')}", file=sys.stderr)
+        sys.exit(1)
+    print(f"\n🔍 Token Swap Check: {args.chain}:{args.contract}")
+    for k, v in data.items():
+        print(f"  {k:<24} {v}")
+
+
+def cmd_token_list(args):
+    """Get popular swap token list."""
+    body = {"chain": args.chain}
+    result = request("/swap-go/swapx/getTokenList", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    items = result.get("data", {}).get("list", [])
+    if not items:
+        items = result.get("data", []) if isinstance(result.get("data"), list) else []
+    if not items:
+        print("No tokens found.")
+        return
+    print(f"\n{'Symbol':<12} {'Name':<20} {'Contract':<44}")
+    print("-" * 78)
+    for t in items[:30]:
+        symbol = t.get("symbol", "?")
+        name = t.get("name", "?")[:18]
+        contract = t.get("contract", "")[:42]
+        print(f"{symbol:<12} {name:<20} {contract:<44}")
+
+
+def cmd_balance(args):
+    """Get wallet token balances."""
+    contracts = args.contract if args.contract else [""]
+    body = {
+        "chain": args.chain,
+        "address": args.address,
+        "contractList": contracts,
+    }
+    result = request("/user/wallet/batchV2", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    items = result.get("data", {}).get("list", [])
+    if not items:
+        items = result.get("data", []) if isinstance(result.get("data"), list) else []
+    if not items:
+        print("No balance data.")
+        return
+    print(f"\n💰 Balances: {args.chain} — {args.address[:16]}...")
+    print(f"{'Symbol':<12} {'Balance':<20} {'Value (USD)':<16}")
+    print("-" * 50)
+    for t in items:
+        symbol = t.get("symbol") or t.get("tokenSymbol", "?")
+        balance = t.get("balance") or t.get("amount", "0")
+        usd = t.get("usdValue") or t.get("valueInUsd") or ""
+        if usd:
+            usd = f"${fmt_number(usd)}"
+        print(f"{symbol:<12} {str(balance):<20} {usd:<16}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────
@@ -864,81 +845,11 @@ def main():
     p.add_argument("tokens", nargs="+", help="chain:contract pairs (e.g. sol: eth:0xdAC...)")
     p.set_defaults(func=cmd_batch_price)
 
-    # swap
-    p = sub.add_parser("swap", help="Get swap quote")
-    p.add_argument("--from-chain", required=True, help="Source chain")
-    p.add_argument("--from-contract", default="", help="Source token (omit for native)")
-    p.add_argument("--to-chain", default="", help="Dest chain (default: same)")
-    p.add_argument("--to-contract", required=True, help="Dest token contract")
-    p.add_argument("--amount", required=True,
-                   help="Human-readable amount (0.1 = 0.1 USDT, NOT wei/lamports)")
-    p.add_argument("--from-address", default="", help="Sender wallet (for more accurate quotes)")
-    p.add_argument("--from-symbol", default="", help="Source token symbol")
-    p.add_argument("--to-symbol", default="", help="Dest token symbol")
-    p.set_defaults(func=cmd_swap)
-
     # liquidity
     p = sub.add_parser("lp", help="Liquidity pool info")
     p.add_argument("chain")
     p.add_argument("contract")
     p.set_defaults(func=cmd_liquidity)
-
-    # calldata
-    p = sub.add_parser("calldata", help="Generate unsigned swap transaction data")
-    p.add_argument("--from-chain", required=True, help="Source chain")
-    p.add_argument("--from-contract", default="", help="Source token (omit for native)")
-    p.add_argument("--to-chain", default="", help="Dest chain (default: same)")
-    p.add_argument("--to-contract", required=True, help="Dest token contract")
-    p.add_argument("--amount", required=True,
-                   help="Human-readable amount (0.1 = 0.1 USDT, NOT wei/lamports)")
-    p.add_argument("--from-address", required=True, help="Sender wallet address")
-    p.add_argument("--to-address", required=True, help="Recipient wallet address")
-    p.add_argument("--market", required=True, help="Market/aggregator from quote result")
-    p.add_argument("--slippage", type=float, help="Slippage tolerance percentage")
-    p.add_argument("--deadline", type=int,
-                   help="Transaction deadline in seconds (default: API default 600s). "
-                        "Recommended: 300s for safety against sandwich attacks.")
-    p.add_argument("--from-symbol", default="", help="Source token symbol")
-    p.add_argument("--to-symbol", default="", help="Dest token symbol")
-    p.set_defaults(func=cmd_calldata)
-
-    # order-quote
-    p = sub.add_parser("order-quote", help="Get order-mode swap quote (gasless + cross-chain)")
-    p.add_argument("--from-chain", required=True, help="Source chain")
-    p.add_argument("--from-contract", default="", help="Source token contract")
-    p.add_argument("--to-chain", default="", help="Dest chain (default: same)")
-    p.add_argument("--to-contract", required=True, help="Dest token contract")
-    p.add_argument("--amount", required=True, help="Human-readable amount")
-    p.add_argument("--from-address", required=True, help="Sender wallet address")
-    p.add_argument("--to-address", default="", help="Recipient address (required for cross-chain to non-EVM)")
-    p.add_argument("--fee-rate", default="", help="B2B fee rate")
-    p.set_defaults(func=cmd_order_quote)
-
-    # order-create
-    p = sub.add_parser("order-create", help="Create order with unsigned tx/signature data")
-    p.add_argument("--from-chain", required=True, help="Source chain")
-    p.add_argument("--from-contract", default="", help="Source token contract")
-    p.add_argument("--to-chain", default="", help="Dest chain (default: same)")
-    p.add_argument("--to-contract", required=True, help="Dest token contract")
-    p.add_argument("--amount", required=True, help="Human-readable amount")
-    p.add_argument("--from-address", required=True, help="Sender wallet address")
-    p.add_argument("--to-address", default="", help="Recipient address")
-    p.add_argument("--market", required=True, help="Market from order-quote")
-    p.add_argument("--slippage", type=float, help="Slippage tolerance %")
-    p.add_argument("--fee-rate", default="", help="B2B fee rate")
-    p.add_argument("--feature", default="", help="Feature flag (e.g. no_gas for gasless)")
-    p.set_defaults(func=cmd_order_create)
-
-    # order-submit
-    p = sub.add_parser("order-submit", help="Submit signed transactions for an order")
-    p.add_argument("--order-id", required=True, help="Order ID from order-create")
-    p.add_argument("--signed-txs", nargs="+", required=True, help="Signed transaction data")
-    p.set_defaults(func=cmd_order_submit)
-
-    # order-status
-    p = sub.add_parser("order-status", help="Query order lifecycle status")
-    p.add_argument("--order-id", required=True, help="Order ID")
-    p.set_defaults(func=cmd_order_status)
 
     # search
     p = sub.add_parser("search", help="Search tokens by keyword")
@@ -1022,11 +933,72 @@ def main():
     p.add_argument("contract")
     p.set_defaults(func=cmd_top_profit)
 
-    # send (broadcast signed tx)
-    p = sub.add_parser("send", help="Broadcast signed transactions (MEV-protected)")
-    p.add_argument("chain", help="Chain name (e.g. sol, eth, bnb)")
-    p.add_argument("txs", nargs="+", help="Transactions as id:chain:from:rawTx")
-    p.set_defaults(func=cmd_send)
+    # ── Swap Flow ─────────────────────────────────────────────────────────
+
+    # quote
+    p = sub.add_parser("quote", help="Get swap quote (multiple markets)")
+    p.add_argument("--from-chain", required=True, help="Source chain")
+    p.add_argument("--from-contract", default="", help="Source token (omit for native)")
+    p.add_argument("--to-chain", default="", help="Dest chain (default: same)")
+    p.add_argument("--to-contract", required=True, help="Dest token contract")
+    p.add_argument("--amount", required=True, help="Human-readable amount")
+    p.add_argument("--from-address", default="", help="Sender wallet (for more accurate quotes)")
+    p.set_defaults(func=cmd_quote)
+
+    # confirm
+    p = sub.add_parser("confirm", help="Confirm swap with chosen market")
+    p.add_argument("--from-chain", required=True, help="Source chain")
+    p.add_argument("--from-contract", default="", help="Source token")
+    p.add_argument("--to-chain", default="", help="Dest chain")
+    p.add_argument("--to-contract", required=True, help="Dest token contract")
+    p.add_argument("--amount", required=True, help="Human-readable amount")
+    p.add_argument("--from-address", required=True, help="Sender wallet address")
+    p.add_argument("--market", required=True, help="Market from quote result")
+    p.add_argument("--slippage", type=float, help="Slippage tolerance %")
+    p.set_defaults(func=cmd_confirm)
+
+    # make-order
+    p = sub.add_parser("make-order", help="Create swap order (unsigned tx data)")
+    p.add_argument("--from-chain", required=True, help="Source chain")
+    p.add_argument("--from-contract", default="", help="Source token")
+    p.add_argument("--to-chain", default="", help="Dest chain")
+    p.add_argument("--to-contract", required=True, help="Dest token contract")
+    p.add_argument("--amount", required=True, help="Human-readable amount")
+    p.add_argument("--from-address", required=True, help="Sender wallet address")
+    p.add_argument("--to-address", default="", help="Recipient address")
+    p.add_argument("--market", required=True, help="Market from confirm result")
+    p.add_argument("--slippage", type=float, help="Slippage tolerance %")
+    p.set_defaults(func=cmd_make_order)
+
+    # send-order
+    p = sub.add_parser("send-order", help="Submit signed order transactions")
+    p.add_argument("--order-id", required=True, help="Order ID from make-order")
+    p.add_argument("--signed-txs", nargs="+", required=True, help="Signed transaction data")
+    p.set_defaults(func=cmd_send_order)
+
+    # order-details
+    p = sub.add_parser("order-details", help="Query order status")
+    p.add_argument("--order-id", required=True, help="Order ID")
+    p.set_defaults(func=cmd_order_details)
+
+    # check-token
+    p = sub.add_parser("check-token", help="Pre-trade token risk check")
+    p.add_argument("chain")
+    p.add_argument("contract")
+    p.set_defaults(func=cmd_check_token)
+
+    # token-list
+    p = sub.add_parser("token-list", help="Popular swap tokens for a chain")
+    p.add_argument("chain", help="Chain (e.g. eth, sol, bnb)")
+    p.set_defaults(func=cmd_token_list)
+
+    # balance
+    p = sub.add_parser("balance", help="Get wallet token balances")
+    p.add_argument("chain", help="Chain (e.g. eth, sol, bnb)")
+    p.add_argument("address", help="Wallet address")
+    p.add_argument("--contract", action="append", default=None,
+                   help="Token contract (repeatable; omit for native)")
+    p.set_defaults(func=cmd_balance)
 
     args = parser.parse_args()
     args.func(args)
