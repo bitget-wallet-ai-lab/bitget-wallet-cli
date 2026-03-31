@@ -611,7 +611,10 @@ def cmd_search_v2(args):
         name = t.get("name", "?")[:18]
         chain = t.get("chain", "?")
         contract = t.get("contract", "")[:42]
-        price = fmt_price(t.get("price"))
+        try:
+            price = fmt_price(t.get("price"))
+        except (ValueError, TypeError):
+            price = str(t.get("price", "?"))
         print(f"{symbol:<12} {name:<20} {chain:<10} {contract:<44} {price}")
 
 
@@ -632,22 +635,28 @@ def cmd_smart_money(args):
     if args.json:
         print(json.dumps(result, indent=2))
         return
-    items = result.get("data", {}).get("list", [])
+    items = result.get("data", {}).get("addresses", [])
+    if not items:
+        items = result.get("data", {}).get("list", [])
     if not items:
         print("No smart money addresses found.")
         return
-    print(f"\n{'Address':<16} {'Tags':<20} {'PnL':<16} {'Win Rate':<12} {'Trades'}")
-    print("-" * 80)
-    for a in items[:args.limit]:
-        addr = (a.get("address") or "?")[:14] + ".."
-        tags = ", ".join(a.get("tags", [])) if a.get("tags") else "-"
-        tags = tags[:18]
-        pnl = fmt_volume(a.get("pnl_usd") or a.get("pnl"))
-        win_rate = a.get("win_rate") or a.get("winRate") or "?"
-        if isinstance(win_rate, (int, float)):
-            win_rate = f"{win_rate:.1f}%"
-        trades = fmt_number(a.get("trade_count") or a.get("tradeCount"))
-        print(f"{addr:<16} {tags:<20} {pnl:<16} {win_rate:<12} {trades}")
+    print(f"\n{'#':<4} {'Address':<18} {'Tags':<16} {'PnL (USD)':<18} {'Win Rate':<12} {'Trades'}")
+    print("-" * 86)
+    for i, a in enumerate(items[:args.limit], 1):
+        addr = (a.get("address") or "?")[:16] + ".."
+        tag_list = a.get("address_tags") or a.get("tags") or []
+        tags = ", ".join(t.get("name", t) if isinstance(t, dict) else str(t) for t in tag_list)[:14]
+        pa = a.get("profit_analysis", {})
+        pnl = fmt_volume(pa.get("total_profit_usd") or a.get("pnl_usd"))
+        win_rate_raw = pa.get("win_rate") or a.get("win_rate") or "?"
+        try:
+            wr = float(win_rate_raw)
+            win_rate = f"{wr*100:.1f}%" if wr <= 1 else f"{wr:.1f}%"
+        except (ValueError, TypeError):
+            win_rate = str(win_rate_raw)
+        trades = fmt_number(pa.get("tx_count") or a.get("trade_count"))
+        print(f"{i:<4} {addr:<18} {tags:<16} {pnl:<18} {win_rate:<12} {trades}")
 
 
 def cmd_rwa_list(args):
