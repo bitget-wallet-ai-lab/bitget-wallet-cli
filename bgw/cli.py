@@ -5,9 +5,10 @@ import argparse
 import json
 import sys
 import time
+import urllib.parse
 
 from . import __version__
-from .api import request
+from .api import request, request_get
 from .format import fmt_change, fmt_number, fmt_price, fmt_volume
 
 CHAINS = {
@@ -588,6 +589,201 @@ def cmd_top_profit(args):
         print(f"{i:<4} {addr:<44} {profit:<16} {roi}")
 
 
+# ── V2 / RWA Commands ─────────────────────────────────────────────────────
+
+def cmd_search_v2(args):
+    """Search tokens via v2 endpoint."""
+    body = {"keyword": args.keyword}
+    if args.chain:
+        body["chain"] = args.chain
+    result = request("/market/v2/search/tokens", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    items = result.get("data", {}).get("list", [])
+    if not items:
+        print("No tokens found.")
+        return
+    print(f"\n{'Symbol':<12} {'Name':<20} {'Chain':<10} {'Contract':<44} {'Price'}")
+    print("-" * 100)
+    for t in items:
+        symbol = t.get("symbol", "?")
+        name = t.get("name", "?")[:18]
+        chain = t.get("chain", "?")
+        contract = t.get("contract", "")[:42]
+        price = fmt_price(t.get("price"))
+        print(f"{symbol:<12} {name:<20} {chain:<10} {contract:<44} {price}")
+
+
+def cmd_smart_money(args):
+    """Get smart money addresses."""
+    body = {
+        "data_period": args.period,
+        "sort_field": args.sort,
+        "sort_order": "desc",
+        "page": 1,
+        "limit": args.limit,
+    }
+    if args.group:
+        body["recommend_group_ids"] = [args.group]
+    if args.chain:
+        body["param_filters"] = {"chain": {"values": [args.chain]}}
+    result = request("/market/v2/monitor/recommend-group/address/list", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    items = result.get("data", {}).get("list", [])
+    if not items:
+        print("No smart money addresses found.")
+        return
+    print(f"\n{'Address':<16} {'Tags':<20} {'PnL':<16} {'Win Rate':<12} {'Trades'}")
+    print("-" * 80)
+    for a in items[:args.limit]:
+        addr = (a.get("address") or "?")[:14] + ".."
+        tags = ", ".join(a.get("tags", [])) if a.get("tags") else "-"
+        tags = tags[:18]
+        pnl = fmt_volume(a.get("pnl_usd") or a.get("pnl"))
+        win_rate = a.get("win_rate") or a.get("winRate") or "?"
+        if isinstance(win_rate, (int, float)):
+            win_rate = f"{win_rate:.1f}%"
+        trades = fmt_number(a.get("trade_count") or a.get("tradeCount"))
+        print(f"{addr:<16} {tags:<20} {pnl:<16} {win_rate:<12} {trades}")
+
+
+def cmd_rwa_list(args):
+    """List RWA tickers."""
+    body = {"chain": args.chain}
+    if args.address:
+        body["user_address"] = args.address
+    if args.keyword:
+        body["key_word"] = args.keyword
+    result = request("/market/v2/rwa/GetUserTickerSelector", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    items = result.get("data", {}).get("list", [])
+    if not items:
+        items = result.get("data", []) if isinstance(result.get("data"), list) else []
+    if not items:
+        print("No RWA tickers found.")
+        return
+    has_balance = args.address is not None
+    header = f"{'Ticker':<12} {'Name':<20} {'Price':<16}"
+    if has_balance:
+        header += f" {'Balance':<16}"
+    print(f"\n{header}")
+    print("-" * (50 + (18 if has_balance else 0)))
+    for t in items:
+        ticker = t.get("ticker", "?")
+        name = t.get("name", "?")[:18]
+        price = fmt_price(t.get("price"))
+        line = f"{ticker:<12} {name:<20} {price:<16}"
+        if has_balance:
+            balance = t.get("balance") or t.get("amount") or "-"
+            line += f" {str(balance):<16}"
+        print(line)
+
+
+def cmd_rwa_config(args):
+    """Get RWA config for a chain/address."""
+    body = {"addressList": [{"chain": args.chain, "address": args.address}]}
+    result = request("/swap-go/rwa/getConfig", body)
+    print(json.dumps(result, indent=2))
+
+
+def cmd_rwa_info(args):
+    """Get RWA stock info for a ticker."""
+    ticker_encoded = urllib.parse.quote(args.ticker, safe="")
+    path = f"/market/v2/rwa/StockInfo?ticker={ticker_encoded}"
+    result = request_get(path)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print(f"No info for ticker: {args.ticker}")
+        return
+    print(f"\n📈 RWA Stock Info: {args.ticker}")
+    print(f"{'Ticker:':<20} {data.get('ticker', '?')}")
+    print(f"{'Status:':<20} {data.get('status', '?')}")
+    print(f"{'Min Amount:':<20} {data.get('min_amount') or data.get('minAmount', '?')}")
+    print(f"{'Max Amount:':<20} {data.get('max_amount') or data.get('maxAmount', '?')}")
+    desc = data.get("description") or data.get("desc") or ""
+    if desc:
+        print(f"{'Description:':<20} {desc[:200]}")
+
+
+def cmd_rwa_price(args):
+    """Get RWA stock order price."""
+    body = {
+        "ticker": args.ticker,
+        "chain": args.chain,
+        "side": args.side,
+        "tx_coin_contract": args.coin_contract,
+        "user_address": args.address,
+    }
+    result = request("/market/v2/rwa/StockOrderPrice", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print(f"No price data for {args.ticker}")
+        return
+    print(f"\n💲 RWA Order Price: {args.ticker}")
+    print(f"{'Order Price:':<20} {data.get('order_price') or data.get('orderPrice', '?')}")
+    print(f"{'Price Source:':<20} {data.get('price_source') or data.get('priceSource', '?')}")
+
+
+def cmd_rwa_kline(args):
+    """Get RWA K-line data."""
+    body = {"chain": "rwa", "contract": args.ticker, "period": args.period}
+    if args.size:
+        body["size"] = args.size
+    result = request("/market/v2/coin/Kline", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    candles = result.get("data", {}).get("list", [])
+    if not candles:
+        print("No kline data.")
+        return
+    print(f"\n{'Time':<22} {'Open':<14} {'High':<14} {'Low':<14} {'Close':<14} {'Volume':<14}")
+    print("-" * 94)
+    from datetime import datetime
+    for c in candles[-(args.size or 30):]:
+        ts = int(c.get("time", 0))
+        if ts > 1e12:
+            ts = ts / 1000
+        t = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") if ts else "?"
+        print(f"{t:<22} {fmt_price(c.get('open')):<14} {fmt_price(c.get('high')):<14} "
+              f"{fmt_price(c.get('low')):<14} {fmt_price(c.get('close')):<14} "
+              f"{fmt_volume(c.get('volume')):<14}")
+
+
+def cmd_rwa_holdings(args):
+    """Get RWA holdings for an address."""
+    result = request("/market/v2/rwa/GetMyHoldings", {"user_address": args.address})
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    items = result.get("data", {}).get("list", [])
+    if not items:
+        items = result.get("data", []) if isinstance(result.get("data"), list) else []
+    if not items:
+        print("No RWA holdings found.")
+        return
+    print(f"\n{'Ticker':<12} {'Balance':<20} {'Chain Asset'}")
+    print("-" * 56)
+    for h in items:
+        ticker = h.get("ticker", "?")
+        balance = h.get("balance") or h.get("amount", "?")
+        chain_asset = h.get("chain_asset") or h.get("chainAsset") or "-"
+        if isinstance(chain_asset, dict):
+            chain_asset = json.dumps(chain_asset)
+        print(f"{ticker:<12} {str(balance):<20} {str(chain_asset)[:40]}")
+
+
 # ── Swap Flow Commands ────────────────────────────────────────────────────
 
 def cmd_quote(args):
@@ -1081,6 +1277,62 @@ def main():
     p.add_argument("--contract", action="append", default=None,
                    help="Token contract (repeatable; omit for native)")
     p.set_defaults(func=cmd_balance)
+
+    # ── V2 / RWA ────────────────────────────────────────────────────────
+
+    # search-v2
+    p = sub.add_parser("search-v2", help="Search tokens (v2 endpoint)")
+    p.add_argument("keyword", help="Search keyword")
+    p.add_argument("--chain", default="", help="Filter by chain")
+    p.set_defaults(func=cmd_search_v2)
+
+    # smart-money
+    p = sub.add_parser("smart-money", help="Smart money address rankings")
+    p.add_argument("--group", default="", help="Recommend group ID")
+    p.add_argument("--period", default="7d", help="Data period (default: 7d)")
+    p.add_argument("--sort", default="pnl_usd", help="Sort field (default: pnl_usd)")
+    p.add_argument("--chain", default="", help="Filter by chain")
+    p.add_argument("-n", "--limit", type=int, default=10, help="Number of results")
+    p.set_defaults(func=cmd_smart_money)
+
+    # rwa-list
+    p = sub.add_parser("rwa-list", help="List RWA tickers")
+    p.add_argument("--chain", default="bnb", help="Chain (default: bnb)")
+    p.add_argument("--address", default=None, help="User address for balance info")
+    p.add_argument("--keyword", default="", help="Filter by keyword")
+    p.set_defaults(func=cmd_rwa_list)
+
+    # rwa-config
+    p = sub.add_parser("rwa-config", help="Get RWA config")
+    p.add_argument("--chain", required=True, help="Chain (e.g. bnb)")
+    p.add_argument("--address", required=True, help="Wallet address")
+    p.set_defaults(func=cmd_rwa_config)
+
+    # rwa-info
+    p = sub.add_parser("rwa-info", help="Get RWA stock info")
+    p.add_argument("ticker", help="Stock ticker (e.g. NVDA)")
+    p.set_defaults(func=cmd_rwa_info)
+
+    # rwa-price
+    p = sub.add_parser("rwa-price", help="Get RWA order price")
+    p.add_argument("ticker", help="Stock ticker")
+    p.add_argument("--chain", required=True, help="Chain (e.g. bnb)")
+    p.add_argument("--side", required=True, help="buy or sell")
+    p.add_argument("--coin-contract", required=True, help="Payment coin contract")
+    p.add_argument("--address", required=True, help="User wallet address")
+    p.set_defaults(func=cmd_rwa_price)
+
+    # rwa-kline
+    p = sub.add_parser("rwa-kline", help="Get RWA K-line data")
+    p.add_argument("ticker", help="Stock ticker")
+    p.add_argument("-p", "--period", default="1d", help="Period (default: 1d)")
+    p.add_argument("-n", "--size", type=int, default=30, help="Number of candles")
+    p.set_defaults(func=cmd_rwa_kline)
+
+    # rwa-holdings
+    p = sub.add_parser("rwa-holdings", help="Get RWA holdings")
+    p.add_argument("address", help="User wallet address")
+    p.set_defaults(func=cmd_rwa_holdings)
 
     args = parser.parse_args()
     args.func(args)

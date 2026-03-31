@@ -39,3 +39,23 @@ def request(path: str, body: dict | None = None) -> dict:
     if resp.status_code != 200:
         return {"status": -1, "error_code": resp.status_code, "msg": resp.text[:500]}
     return resp.json()
+
+
+def request_get(path_with_query: str) -> dict:
+    """GET request with BKHmacAuth signing."""
+    ts = str(int(time.time() * 1000))
+    sign = _make_sign("GET", path_with_query, "", ts)
+    token_val = WALLET_ID if WALLET_ID else "toc_agent"
+    headers = {
+        "channel": "toc_agent",
+        "brand": "toc_agent",
+        "clientversion": "10.0.0",
+        "language": "en",
+        "token": token_val,
+        "X-SIGN": sign,
+        "X-TIMESTAMP": ts,
+    }
+    resp = requests.get(BASE_URL + path_with_query, headers=headers, timeout=30)
+    if resp.status_code != 200:
+        return {"status": -1, "error_code": resp.status_code, "msg": resp.text[:500]}
+    return resp.json()
