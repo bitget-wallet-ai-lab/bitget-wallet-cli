@@ -99,6 +99,14 @@ bgw check-token eth 0x6982... --symbol PEPE
 bgw balance eth 0xd8dA6BF269...
 bgw balance sol 75k14Ug2UC67...
 
+# Transfer
+bgw transfer-make --chain eth --contract 0xdAC17F958D2ee523a2206206994597C13D831ec7 \
+  --from-address 0xYour --to-address 0xRecipient --amount 100
+bgw transfer-make --chain base --contract 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+  --from-address 0xYour --to-address 0xRecipient --amount 50 --gasless
+bgw transfer-submit --order-id <orderId> --sig <signedTx>
+bgw transfer-status --order-id <orderId>
+
 # Raw JSON output (pipe-friendly)
 bgw --json price sol
 bgw --json top topGainers | jq '.[0]'
@@ -110,7 +118,7 @@ bgw --json top topGainers | jq '.[0]'
 
 Use empty contract (or omit) for native tokens (ETH, SOL, BNB, etc.).
 
-## Commands (36)
+## Commands (39)
 
 ### Market Data
 | Command | Description |
@@ -163,12 +171,19 @@ Use empty contract (or omit) for native tokens (ETH, SOL, BNB, etc.).
 | `bgw check-token` | Pre-trade risk check |
 | `bgw token-list` | Popular tokens per chain |
 
+### Token Transfer
+| Command | Description |
+|---------|-------------|
+| `bgw transfer-make` | Create transfer order (unsigned tx data, supports gasless) |
+| `bgw transfer-submit` | Submit signed transfer transaction |
+| `bgw transfer-status` | Poll transfer order status |
+
 ### Balance
 | Command | Description |
 |---------|-------------|
 | `bgw balance` | Wallet token balances with USD values |
 
-> ⚠️ **Swap amounts are human-readable** — use `--from-amount 0.1` for 0.1 USDT, NOT wei/lamports.
+> ⚠️ **Amounts are human-readable** — use `--amount 100` for 100 USDT, NOT wei/lamports.
 
 ## Environment Variables
 

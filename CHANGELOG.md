@@ -6,6 +6,28 @@ Format: date-based versioning (`YYYY.M.DD-N`), aligned with [bitget-wallet-skill
 
 ---
 
+## [2026.4.13-1] - 2026-04-13
+
+### Added — Token Transfer (3 commands, aligned with Skill PR #53)
+- `bgw transfer-make` — create transfer order via `POST /userv2/order/makeTransferOrder`
+  - `--gasless` flag: gas paid from USDT/USDC balance instead of native token
+  - `--gasless-pay-token` for manual pay token selection
+  - `--override-7702` for existing EIP-7702 binding override
+  - `--memo` for on-chain memo inclusion
+  - Pretty output: orderId, sign type, gasless status, estimateRevert warning
+- `bgw transfer-submit` — submit signed transfer via `POST /userv2/order/submitTransferOrder`
+- `bgw transfer-status` — poll transfer order status via `GET /userv2/order/getTransferOrder`
+  - Status flow: PENDING → PROCESSING → SUCCESS | FAILED
+
+### Changed
+- Supported transfer chains: eth, bnb, base, arbitrum, matic, morph, sol
+
+### Stats
+- 39 CLI commands (was 36)
+- 36 API endpoints covered (100% Skill parity)
+
+---
+
 ## [2026.3.31-1] - 2026-03-31
 
 ### Breaking Changes

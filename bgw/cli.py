@@ -1001,6 +1001,89 @@ def cmd_token_list(args):
         print(f"{symbol:<12} {name:<20} {contract:<44}")
 
 
+def cmd_transfer_make(args):
+    """Create transfer order (returns unsigned tx data)."""
+    body: dict = {
+        "chain": args.chain,
+        "contract": args.contract or "",
+        "fromAddress": args.from_address,
+        "toAddress": args.to_address,
+        "amount": args.amount,
+    }
+    if args.memo:
+        body["memo"] = args.memo
+    if args.gasless:
+        body["noGas"] = True
+    if args.gasless_pay_token:
+        body["noGasPayToken"] = args.gasless_pay_token
+    if args.override_7702:
+        body["override7702"] = True
+    result = request("/userv2/order/makeTransferOrder", body)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print(f"Make transfer failed: {result.get('msg', 'unknown error')}", file=sys.stderr)
+        sys.exit(1)
+    print(f"\n📝 Transfer Order Created")
+    print(f"{'Order ID:':<20} {data.get('orderId', '?')}")
+    source = data.get("source", {})
+    src_type = source.get("type", "?")
+    print(f"{'Sign Type:':<20} {src_type}")
+    if data.get("estimateRevert"):
+        print(f"⚠️  estimateRevert=true — transfer likely to fail, check balance/contract")
+    no_gas = data.get("noGas", {})
+    if isinstance(no_gas, dict) and no_gas.get("available"):
+        pay_sym = no_gas.get("payTokenSymbol", "?")
+        pay_amt = no_gas.get("payAmount", "?")
+        print(f"{'Gasless:':<20} ✅ fee {pay_amt} {pay_sym}")
+    elif args.gasless:
+        print(f"{'Gasless:':<20} ⚠️  not available, degraded to standard transfer")
+
+
+def cmd_transfer_submit(args):
+    """Submit signed transfer order."""
+    result = request("/userv2/order/submitTransferOrder", {
+        "orderId": args.order_id,
+        "sig": args.sig,
+    })
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    if result.get("error_code") == 0 or result.get("status") == 0:
+        print(f"✅ Transfer order {args.order_id} submitted successfully")
+    else:
+        print(f"❌ Submit failed: {result.get('msg', 'unknown error')}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_transfer_status(args):
+    """Query transfer order status."""
+    path = f"/userv2/order/getTransferOrder?orderId={urllib.parse.quote(args.order_id)}"
+    result = request_get(path)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    data = result.get("data", {})
+    if not data:
+        print(f"Query failed: {result.get('msg', 'unknown error')}", file=sys.stderr)
+        sys.exit(1)
+    status = data.get("orderStatus", data.get("status", "?"))
+    icon = {"SUCCESS": "✅", "FAILED": "❌", "PROCESSING": "⏳", "PENDING": "📝"}.get(status, "❓")
+    print(f"\n{icon} Transfer Status: {status}")
+    print(f"{'Order ID:':<20} {data.get('orderId', '?')}")
+    print(f"{'Chain:':<20} {data.get('chain', '?')}")
+    print(f"{'Amount:':<20} {data.get('amount', '?')}")
+    txid = data.get("txid") or data.get("txId") or data.get("txHash", "")
+    if txid:
+        print(f"{'Tx ID:':<20} {txid}")
+    if status == "FAILED":
+        reason = data.get("failReason", "")
+        if reason:
+            print(f"{'Fail Reason:':<20} {reason}")
+
+
 def cmd_balance(args):
     """Get wallet token balances."""
     contracts = args.contract if args.contract else [""]
@@ -1286,6 +1369,32 @@ def main():
     p.add_argument("--contract", action="append", default=None,
                    help="Token contract (repeatable; omit for native)")
     p.set_defaults(func=cmd_balance)
+
+    # ── Transfer Flow ─────────────────────────────────────────────────────
+
+    # transfer-make
+    p = sub.add_parser("transfer-make", help="Create transfer order (unsigned tx data)")
+    p.add_argument("--chain", required=True, help="Chain (eth, bnb, base, arbitrum, matic, morph, sol)")
+    p.add_argument("--contract", default="", help="Token contract address (omit for native token)")
+    p.add_argument("--from-address", required=True, help="Sender wallet address")
+    p.add_argument("--to-address", required=True, help="Recipient wallet address")
+    p.add_argument("--amount", required=True, help="Human-readable transfer amount (e.g. 100)")
+    p.add_argument("--memo", default="", help="Optional on-chain memo")
+    p.add_argument("--gasless", action="store_true", help="Pay gas from USDT/USDC balance")
+    p.add_argument("--gasless-pay-token", default="", help="Specific pay token contract for gasless")
+    p.add_argument("--override-7702", action="store_true", help="Override existing EIP-7702 binding")
+    p.set_defaults(func=cmd_transfer_make)
+
+    # transfer-submit
+    p = sub.add_parser("transfer-submit", help="Submit signed transfer order")
+    p.add_argument("--order-id", required=True, help="Order ID from transfer-make")
+    p.add_argument("--sig", required=True, help="Signed tx data (hex for EVM, base58 for Solana, JSON for evm_7702)")
+    p.set_defaults(func=cmd_transfer_submit)
+
+    # transfer-status
+    p = sub.add_parser("transfer-status", help="Query transfer order status")
+    p.add_argument("--order-id", required=True, help="Order ID")
+    p.set_defaults(func=cmd_transfer_status)
 
     # ── V2 / RWA ────────────────────────────────────────────────────────
 
