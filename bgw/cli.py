@@ -1003,6 +1003,16 @@ def cmd_token_list(args):
 
 def cmd_transfer_make(args):
     """Create transfer order (returns unsigned tx data)."""
+    # EIP-7702 override pre-flight warning
+    if args.override_7702:
+        print("⚠️  EIP-7702 OVERRIDE WARNING", file=sys.stderr)
+        print("This will OVERWRITE the existing third-party EIP-7702 binding on this address.", file=sys.stderr)
+        print("This is a permanent account-level change. The previous binding cannot be restored.", file=sys.stderr)
+        confirm = input("Type 'yes' to confirm override, anything else to abort: ").strip()
+        if confirm != "yes":
+            print("Aborted — 7702 override not confirmed.", file=sys.stderr)
+            sys.exit(1)
+
     body: dict = {
         "chain": args.chain,
         "contract": args.contract or "",
@@ -1022,6 +1032,12 @@ def cmd_transfer_make(args):
     if args.json:
         print(json.dumps(result, indent=2))
         return
+    error_code = result.get("error_code")
+    if error_code == 30108:
+        print("❌ ERROR: Existing third-party EIP-7702 binding detected on this address.", file=sys.stderr)
+        print("Gasless transfer requires overwriting this binding.", file=sys.stderr)
+        print("To override, re-run with --override-7702 (this will REPLACE the existing binding).", file=sys.stderr)
+        sys.exit(1)
     data = result.get("data", {})
     if not data:
         print(f"Make transfer failed: {result.get('msg', 'unknown error')}", file=sys.stderr)
@@ -1039,7 +1055,12 @@ def cmd_transfer_make(args):
         pay_amt = no_gas.get("payAmount", "?")
         print(f"{'Gasless:':<20} ✅ fee {pay_amt} {pay_sym}")
     elif args.gasless:
-        print(f"{'Gasless:':<20} ⚠️  not available, degraded to standard transfer")
+        print(f"{'Gasless:':<20} ⚠️  not available")
+        print("Gasless requested but not available (amount below threshold, chain not supported, or no eligible pay token).")
+        confirm = input("Type 'yes' to proceed with standard transfer (native gas required), anything else to abort: ").strip()
+        if confirm != "yes":
+            print("Aborted — gasless not available and fallback not confirmed.", file=sys.stderr)
+            sys.exit(1)
 
 
 def cmd_transfer_submit(args):
@@ -1382,7 +1403,9 @@ def main():
     p.add_argument("--memo", default="", help="Optional on-chain memo")
     p.add_argument("--gasless", action="store_true", help="Pay gas from USDT/USDC balance")
     p.add_argument("--gasless-pay-token", default="", help="Specific pay token contract for gasless")
-    p.add_argument("--override-7702", action="store_true", help="Override existing EIP-7702 binding")
+    p.add_argument("--override-7702", action="store_true",
+                   help="[DANGEROUS] Override existing third-party EIP-7702 binding. "
+                        "Will prompt for confirmation before proceeding.")
     p.set_defaults(func=cmd_transfer_make)
 
     # transfer-submit
